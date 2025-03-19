@@ -1,5 +1,5 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, read};
-use crate::terminal::Terminal;
+use crate::terminal::{TermPosition, Terminal};
 
 pub struct Editor {
     should_quit: bool,
@@ -19,7 +19,10 @@ impl Editor {
 
     fn repl(&mut self) -> Result<(), std::io::Error> {
         loop {
+            Terminal::hide_cursor()?;
             self.refresh_screen()?;
+            Terminal::show_cursor()?;
+            Terminal::flush()?;
 
             if self.should_quit {
                 break;
@@ -52,19 +55,19 @@ impl Editor {
             print!("Goodbye.\r\n");
         } else {
             Self::draw_rows()?;
-            Terminal::move_cursor_to(0, 0)?;
+            Terminal::move_cursor_to(&TermPosition::zero())?;
         }
 
         Ok(())
     }
 
     fn draw_rows() -> Result<(), std::io::Error> {
-        let terminal_ht = Terminal::size()?.0;
+        let ht = Terminal::size()?.height;
 
-        for i in 0..terminal_ht {
-            print!("~");
-            if i < terminal_ht + 1 {
-                print!("\r\n");
+        for i in 0..ht {
+            Terminal::print("~")?;
+            if i < ht + 1 {
+                Terminal::print("\r\n")?;
             }
         }
 

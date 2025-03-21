@@ -3,78 +3,69 @@ use crossterm::queue;
 use crossterm::style;
 use crossterm::terminal::{self, ClearType, disable_raw_mode, enable_raw_mode, size};
 use std::fmt::Display;
-use std::io::stdout;
 use std::io::Write;
+use std::io::stdout;
 
-pub struct TermPosition {
-    pub x: u16,
-    pub y: u16
-}
-
-impl TermPosition {
-    pub fn zero() -> Self {
-        Self {
-            x: 0,
-            y: 0
-        }
-    }
-}
-
-pub struct TermSize {
+pub struct TerminalSize {
     pub width: u16,
-    pub height: u16
+    pub height: u16,
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct TerminalPosition {
+    pub x: u16,
+    pub y: u16,
+}
+
+impl TerminalPosition {
+    pub fn zero() -> Self {
+        Self { x: 0, y: 0 }
+    }
 }
 
 pub struct Terminal;
 
 impl Terminal {
     pub fn terminate() -> Result<(), std::io::Error> {
-        disable_raw_mode()?;
-        Ok(())
+        disable_raw_mode()
     }
 
     pub fn initialize() -> Result<(), std::io::Error> {
         enable_raw_mode()?;
         Self::clear_screen()?;
-        Self::move_cursor_to(&TermPosition::zero())?;
-        Ok(())
+        Self::move_cursor_to(TerminalPosition::zero())
     }
 
     pub fn clear_screen() -> Result<(), std::io::Error> {
-        queue!(stdout(), terminal::Clear(ClearType::All))?;
-        Ok(())
+        queue!(stdout(), terminal::Clear(ClearType::All))
     }
 
-    pub fn move_cursor_to(pos: &TermPosition) -> Result<(), std::io::Error> {
-        queue!(stdout(), cursor::MoveTo(pos.x, pos.y))?;
-        Ok(())
+    pub fn clear_line() -> Result<(), std::io::Error> {
+        queue!(stdout(), terminal::Clear(ClearType::CurrentLine))
+    }
+
+    pub fn move_cursor_to(pos: TerminalPosition) -> Result<(), std::io::Error> {
+        queue!(stdout(), cursor::MoveTo(pos.x, pos.y))
     }
 
     pub fn hide_cursor() -> Result<(), std::io::Error> {
-        queue!(stdout(), cursor::Hide)?;
-        Ok(())
+        queue!(stdout(), cursor::Hide)
     }
 
     pub fn show_cursor() -> Result<(), std::io::Error> {
-        queue!(stdout(), cursor::Show)?;
-        Ok(())
+        queue!(stdout(), cursor::Show)
     }
 
     pub fn print<T: Display>(printable: T) -> Result<(), std::io::Error> {
-        queue!(stdout(), style::Print(printable))?;
-        Ok(())
+        queue!(stdout(), style::Print(printable))
     }
 
-    pub fn flush() -> Result<(), std::io::Error> {
+    pub fn execute() -> Result<(), std::io::Error> {
         stdout().flush()
     }
 
-    pub fn size() -> Result<TermSize, std::io::Error> {
-        let term_size = size()?;
-
-        Ok(TermSize {
-            width: term_size.0,
-            height: term_size.1
-        })
+    pub fn size() -> Result<TerminalSize, std::io::Error> {
+        let (width, height) = size()?;
+        Ok(TerminalSize { width, height })
     }
 }

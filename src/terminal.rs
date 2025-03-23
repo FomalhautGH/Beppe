@@ -2,10 +2,10 @@ use crossterm::cursor;
 use crossterm::queue;
 use crossterm::style;
 use crossterm::terminal::{self, ClearType, disable_raw_mode, enable_raw_mode, size};
-use std::fmt::Display;
 use std::io::Write;
 use std::io::stdout;
 
+#[derive(Clone, Copy)]
 pub struct TerminalSize {
     pub width: u16,
     pub height: u16,
@@ -56,7 +56,7 @@ impl Terminal {
         queue!(stdout(), cursor::Show)
     }
 
-    pub fn print<T: Display>(printable: T) -> Result<(), std::io::Error> {
+    pub fn print(printable: &str) -> Result<(), std::io::Error> {
         queue!(stdout(), style::Print(printable))
     }
 

@@ -5,16 +5,25 @@ use crossterm::terminal::{self, ClearType, disable_raw_mode, enable_raw_mode, si
 use std::io::Write;
 use std::io::stdout;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct TerminalSize {
     pub width: u16,
     pub height: u16,
 }
 
+impl TerminalSize {
+    pub fn new(dim: (u16, u16)) -> Self {
+        Self {
+            width: dim.0,
+            height: dim.1,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Default)]
 pub struct TerminalPosition {
-    pub x: u16,
-    pub y: u16,
+    pub x: usize,
+    pub y: usize,
 }
 
 impl TerminalPosition {
@@ -45,7 +54,8 @@ impl Terminal {
     }
 
     pub fn move_cursor_to(pos: TerminalPosition) -> Result<(), std::io::Error> {
-        queue!(stdout(), cursor::MoveTo(pos.x, pos.y))
+        let (x, y): (u16, u16) = (pos.x.try_into().unwrap(), pos.y.try_into().unwrap());
+        queue!(stdout(), cursor::MoveTo(x, y))
     }
 
     pub fn hide_cursor() -> Result<(), std::io::Error> {

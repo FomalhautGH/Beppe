@@ -1,4 +1,4 @@
-use crate::terminal::{Terminal, TerminalPosition, TerminalSize};
+use crate::terminal::{Terminal, TerminalSize};
 use buffer::Buffer;
 
 mod buffer;
@@ -13,6 +13,14 @@ pub struct View {
 }
 
 impl View {
+    pub fn new() -> Self {
+        View {
+            buf: Buffer::default(),
+            needs_redraw: true,
+            size: Terminal::size().unwrap_or_default(),
+        }
+    }
+
     pub fn resize(&mut self, size: TerminalSize) {
         self.size = size;
         self.needs_redraw = true;
@@ -25,72 +33,42 @@ impl View {
         }
     }
 
-    pub fn render(&mut self) -> Result<(), std::io::Error> {
+    pub fn render(&mut self) {
         if !self.needs_redraw {
-            return Ok(());
+            return;
         }
 
-        if self.buf.is_empty() {
-            Self::render_welcome_title()?;
-        } else {
-            self.render_buffer()?;
+        let TerminalSize { width, height } = self.size;
+        if width == 0 || height == 0 {
+            return;
+        }
+
+        #[allow(clippy::integer_division)]
+        let vertical_center: usize = (height / 3).into();
+
+        for i in 0..height.into() {
+            if let Some(line) = self.buf.lines.get(i) {
+                Self::render_line(i, if line.len() >= width.into() {
+                    &line[0..width.into()]
+                } else {
+                    line
+                });
+            } else if vertical_center == i && self.buf.is_empty() {
+                Self::draw_title(i, width.into());
+            } else {
+                Self::render_line(i, "~");
+            }
         }
 
         self.needs_redraw = false;
-        Ok(())
     }
 
-    fn render_buffer(&self) -> Result<(), std::io::Error> {
-        let width: usize = Terminal::size()?.width.into();
-        let height: usize = Terminal::size()?.height.into();
-
-        for i in 0..height {
-            Terminal::clear_line()?;
-
-            if let Some(line) = self.buf.lines.get(i) {
-                Terminal::print(if line.len() >= width {
-                    &line[0..width]
-                } else {
-                    line
-                })?;
-            } else {
-                Self::draw_empty_row()?;
-            }
-
-            if i.saturating_add(1) < height {
-                Terminal::move_cursor_to(TerminalPosition {
-                    x: 0,
-                    y: i.saturating_add(1),
-                })?;
-            }
-        }
-
-        Ok(())
+    fn render_line(row_num: usize, line: &str) {
+        let result = Terminal::print_row(row_num, line);
+        debug_assert!(result.is_ok(), "Failed to render line.");
     }
 
-    fn render_welcome_title() -> Result<(), std::io::Error> {
-        let height = Terminal::size()?.height;
-
-        for i in 0..height {
-            Terminal::clear_line()?;
-
-            #[allow(clippy::integer_division)]
-            if i == height / 3 {
-                Self::draw_title()?;
-            } else {
-                Self::draw_empty_row()?;
-            }
-
-            if i.saturating_add(1) < height {
-                Terminal::print("\r\n")?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn draw_title() -> Result<(), std::io::Error> {
-        let width: usize = Terminal::size()?.width.into();
+    fn draw_title(row_num: usize, width: usize) {
         let msg = format!("{EDITOR_NAME}::{EDITOR_VERSION}");
 
         #[allow(clippy::integer_division)]
@@ -100,20 +78,6 @@ impl View {
         let mut msg = format!("~{padding}{msg}");
         msg.truncate(width);
 
-        Terminal::print(&msg)
-    }
-
-    fn draw_empty_row() -> Result<(), std::io::Error> {
-        Terminal::print("~")
-    }
-}
-
-impl Default for View {
-    fn default() -> Self {
-        Self {
-            buf: Buffer::default(),
-            needs_redraw: true,
-            size: Terminal::size().unwrap_or_default(),
-        }
+        Self::render_line(row_num, &msg);
     }
 }

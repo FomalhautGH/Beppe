@@ -26,23 +26,21 @@ pub struct TerminalPosition {
     pub y: usize,
 }
 
-impl TerminalPosition {
-    pub fn zero() -> Self {
-        Self { x: 0, y: 0 }
-    }
-}
-
 pub struct Terminal;
 
 impl Terminal {
     pub fn terminate() -> Result<(), std::io::Error> {
+        queue!(stdout(), terminal::LeaveAlternateScreen)?;
+        Self::show_cursor()?;
+        Self::execute()?;
         disable_raw_mode()
     }
 
     pub fn initialize() -> Result<(), std::io::Error> {
         enable_raw_mode()?;
+        queue!(stdout(), terminal::EnterAlternateScreen)?;
         Self::clear_screen()?;
-        Self::move_cursor_to(TerminalPosition::zero())
+        Self::execute()
     }
 
     pub fn clear_screen() -> Result<(), std::io::Error> {
@@ -66,8 +64,14 @@ impl Terminal {
         queue!(stdout(), cursor::Show)
     }
 
-    pub fn print(printable: &str) -> Result<(), std::io::Error> {
-        queue!(stdout(), style::Print(printable))
+    pub fn print(string: &str) -> Result<(), std::io::Error> {
+        queue!(stdout(), style::Print(string))
+    }
+    
+    pub fn print_row(row: usize, text: &str) -> Result<(), std::io::Error> {
+        Self::move_cursor_to(TerminalPosition { x: 0, y: row })?;
+        Self::clear_line()?;
+        Self::print(text)
     }
 
     pub fn execute() -> Result<(), std::io::Error> {

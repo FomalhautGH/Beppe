@@ -7,17 +7,8 @@ use std::io::stdout;
 
 #[derive(Clone, Copy, Default)]
 pub struct TerminalSize {
-    pub width: u16,
-    pub height: u16,
-}
-
-impl TerminalSize {
-    pub fn new(dim: (u16, u16)) -> Self {
-        Self {
-            width: dim.0,
-            height: dim.1,
-        }
-    }
+    pub width: usize,
+    pub height: usize,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -67,7 +58,7 @@ impl Terminal {
     pub fn print(string: &str) -> Result<(), std::io::Error> {
         queue!(stdout(), style::Print(string))
     }
-    
+
     pub fn print_row(row: usize, text: &str) -> Result<(), std::io::Error> {
         Self::move_cursor_to(TerminalPosition { x: 0, y: row })?;
         Self::clear_line()?;
@@ -80,6 +71,7 @@ impl Terminal {
 
     pub fn size() -> Result<TerminalSize, std::io::Error> {
         let (width, height) = size()?;
+        let (width, height) = (width.into(), height.into());
         Ok(TerminalSize { width, height })
     }
 }

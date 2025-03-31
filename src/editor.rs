@@ -1,18 +1,14 @@
-use crate::{
-    terminal::{Terminal, TerminalPosition, TerminalSize},
-    view::View,
-};
-use crossterm::event::{Event, KeyCode, KeyModifiers, read};
+mod editor_cmd;
+mod terminal;
+mod view;
 
-#[derive(Clone, Copy, Default)]
-pub struct Location {
-    pub x: u16,
-    pub y: u16,
-}
+use crossterm::event::{Event, KeyEvent, KeyEventKind, read};
+use editor_cmd::EditorCommand;
+use terminal::Terminal;
+use view::View;
 
 pub struct Editor {
     should_quit: bool,
-    ceret_pos: Location,
     view: View,
 }
 
@@ -34,7 +30,6 @@ impl Editor {
 
         Ok(Self {
             should_quit: false,
-            ceret_pos: Location::default(),
             view,
         })
     }
@@ -49,7 +44,7 @@ impl Editor {
 
             let event = read();
             match event {
-                Ok(event) => self.evaluate_event(&event),
+                Ok(event) => self.evaluate_event(event),
                 Err(err) => {
                     #[cfg(debug_assertions)]
                     panic!("Unrecognized event, error: {err:?}");
@@ -58,60 +53,30 @@ impl Editor {
         }
     }
 
-    fn move_point(&mut self, key_code: KeyCode) {
-        let size = Terminal::size().unwrap_or_default();
-        let (width, height) = (size.width, size.height);
-        let (mut x, mut y) = (self.ceret_pos.x, self.ceret_pos.y);
+    fn evaluate_event(&mut self, event: Event) {
+        let should_process = match event {
+            Event::Key(KeyEvent { kind, .. }) => kind == KeyEventKind::Press,
+            Event::Resize(_, _) => true,
+            _ => false,
+        };
 
-        match key_code {
-            KeyCode::Up | KeyCode::Char('k') => y = y.saturating_sub(1),
-            KeyCode::Left | KeyCode::Char('h') => x = x.saturating_sub(1),
-
-            KeyCode::Down | KeyCode::Char('j') if y < height.saturating_sub(1) => {
-                y = y.saturating_add(1);
-            }
-            KeyCode::Right | KeyCode::Char('l') if x < width.saturating_sub(1) => {
-                x = x.saturating_add(1);
-            }
-
-            KeyCode::PageUp => y = 0,
-            KeyCode::PageDown => y = height.saturating_sub(1),
-            KeyCode::Home => x = 0,
-            KeyCode::End => x = width.saturating_sub(1),
-
-            KeyCode::Down | KeyCode::Right | KeyCode::Char('j' | 'l') => (),
-            _ => unreachable!(),
-        }
-
-        self.ceret_pos.x = x;
-        self.ceret_pos.y = y;
-    }
-
-    fn evaluate_event(&mut self, event: &Event) {
-        match event {
-            Event::Key(key_event) => match key_event.code {
-                KeyCode::Char('q') if key_event.modifiers == KeyModifiers::CONTROL => {
-                    self.should_quit = true;
+        if should_process {
+            match EditorCommand::try_from(event) {
+                Ok(cmd) => {
+                    if matches!(cmd, EditorCommand::Quit) {
+                        self.should_quit = true;
+                    } else {
+                        self.view.handle_command(cmd);
+                    }
                 }
-
-                KeyCode::Up
-                | KeyCode::Down
-                | KeyCode::Char('k' | 'j' | 'l' | 'h')
-                | KeyCode::Left
-                | KeyCode::Right
-                | KeyCode::PageUp
-                | KeyCode::PageDown
-                | KeyCode::Home
-                | KeyCode::End => self.move_point(key_event.code),
-
-                _ => (),
-            },
-
-            Event::Resize(w, h) => {
-                self.view.resize(TerminalSize::new((*w, *h)));
+                Err(err) => {
+                    #[cfg(debug_assertions)]
+                    panic!("Event could not be converted into a editor command: {err}");
+                }
             }
-
-            _ => (),
+        } else {
+            #[cfg(debug_assertions)]
+            panic!("Press Event could not be processed");
         }
     }
 
@@ -119,11 +84,8 @@ impl Editor {
         let _ = Terminal::hide_cursor();
 
         self.view.render();
-        let _ = Terminal::move_cursor_to(TerminalPosition {
-            x: self.ceret_pos.x.into(),
-            y: self.ceret_pos.y.into(),
-        });
 
+        let _ = Terminal::move_cursor_to(self.view.cursor_position());
         let _ = Terminal::show_cursor();
         let _ = Terminal::execute();
     }

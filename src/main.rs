@@ -8,8 +8,6 @@
 )]
 
 mod editor;
-mod terminal;
-mod view;
 use editor::Editor;
 
 fn main() {

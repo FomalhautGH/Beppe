@@ -71,12 +71,12 @@ impl Editor {
                 }
                 Err(err) => {
                     #[cfg(debug_assertions)]
-                    panic!("Event could not be converted into a editor command: {err}");
+                    panic!("Event could not be converted into a editor command: {err}\n");
                 }
             }
         } else {
             #[cfg(debug_assertions)]
-            panic!("Press Event could not be processed");
+            panic!("Press Event could not be processed\n");
         }
     }
 

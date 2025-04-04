@@ -12,13 +12,21 @@ pub struct TerminalSize {
 }
 
 #[derive(Clone, Copy, Default)]
-pub struct TerminalPosition {
+pub struct Position {
     pub x: usize,
     pub y: usize,
 }
 
-pub struct Terminal;
+impl Position {
+    pub const fn subtract(&self, rhs: &Self) -> Self {
+        Self {
+            x: self.x.saturating_sub(rhs.x),
+            y: self.y.saturating_sub(rhs.y),
+        }
+    }
+}
 
+pub struct Terminal;
 impl Terminal {
     pub fn terminate() -> Result<(), std::io::Error> {
         queue!(stdout(), terminal::LeaveAlternateScreen)?;
@@ -42,7 +50,7 @@ impl Terminal {
         queue!(stdout(), terminal::Clear(ClearType::CurrentLine))
     }
 
-    pub fn move_cursor_to(pos: TerminalPosition) -> Result<(), std::io::Error> {
+    pub fn move_cursor_to(pos: Position) -> Result<(), std::io::Error> {
         let (x, y): (u16, u16) = (pos.x.try_into().unwrap(), pos.y.try_into().unwrap());
         queue!(stdout(), cursor::MoveTo(x, y))
     }
@@ -60,7 +68,7 @@ impl Terminal {
     }
 
     pub fn print_row(row: usize, text: &str) -> Result<(), std::io::Error> {
-        Self::move_cursor_to(TerminalPosition { x: 0, y: row })?;
+        Self::move_cursor_to(Position { x: 0, y: row })?;
         Self::clear_line()?;
         Self::print(text)
     }

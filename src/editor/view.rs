@@ -161,7 +161,10 @@ impl View {
             .lines
             .get(self.text_location.line_index)
             .map_or(0, |line| {
-                cmp::min(self.text_location.grapheme_index, line.grapheme_count())
+                cmp::min(
+                    self.text_location.grapheme_index,
+                    line.grapheme_count().saturating_sub(1),
+                )
             });
     }
 

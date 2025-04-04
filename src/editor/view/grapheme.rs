@@ -25,22 +25,32 @@ pub struct TextFragment {
 impl TextFragment {
     pub fn from(g: &str) -> Self {
         let grapheme = String::from(g);
-        match grapheme.width() {
-            0 => Self {
-                grapheme,
-                width: GraphemeWidth::Zero,
-                replacement: Some('·'),
-            },
-            1 => Self {
-                grapheme,
-                width: GraphemeWidth::Half,
-                replacement: None,
-            },
-            _ => Self {
-                grapheme,
-                width: GraphemeWidth::Full,
-                replacement: None,
-            },
+        let (width, replacement) = match grapheme.width() {
+            0 => {
+                if grapheme.chars().next().is_some_and(char::is_control) {
+                    (GraphemeWidth::Zero, Some('▯'))
+                } else {
+                    (GraphemeWidth::Zero, Some('·'))
+                }
+            }
+
+            1 => {
+                if matches!(g, "\t") {
+                    (GraphemeWidth::Half, Some(' '))
+                } else if grapheme.trim().is_empty() {
+                    (GraphemeWidth::Half, Some('␣'))
+                } else {
+                    (GraphemeWidth::Half, None)
+                }
+            }
+
+            _ => (GraphemeWidth::Full, None),
+        };
+
+        Self {
+            grapheme,
+            width,
+            replacement,
         }
     }
 

@@ -16,6 +16,8 @@ impl GraphemeWidth {
     }
 }
 
+/// Rapresents a single grapheme width its width and
+/// replacement character if needed.
 pub struct TextFragment {
     grapheme: String,
     width: GraphemeWidth,
@@ -23,11 +25,12 @@ pub struct TextFragment {
 }
 
 impl TextFragment {
-    pub fn from(g: &str) -> Self {
-        let grapheme = String::from(g);
-        let (width, replacement) = match grapheme.width() {
+    /// Creates a `TextFragment` from a &str.
+    pub fn from(grapheme: &str) -> Self {
+        let owned_grapheme = String::from(grapheme);
+        let (width, replacement) = match owned_grapheme.width() {
             0 => {
-                if grapheme.chars().next().is_some_and(char::is_control) {
+                if owned_grapheme.chars().next().is_some_and(char::is_control) {
                     (GraphemeWidth::Zero, Some('▯'))
                 } else {
                     (GraphemeWidth::Zero, Some('·'))
@@ -35,9 +38,9 @@ impl TextFragment {
             }
 
             1 => {
-                if matches!(g, "\t") {
+                if matches!(grapheme, "\t") {
                     (GraphemeWidth::Half, Some(' '))
-                } else if grapheme.trim().is_empty() {
+                } else if owned_grapheme.trim().is_empty() {
                     (GraphemeWidth::Half, Some('␣'))
                 } else {
                     (GraphemeWidth::Half, None)
@@ -48,7 +51,7 @@ impl TextFragment {
         };
 
         Self {
-            grapheme,
+            grapheme: owned_grapheme,
             width,
             replacement,
         }

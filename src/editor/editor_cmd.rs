@@ -1,6 +1,8 @@
 use super::terminal::TerminalSize;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
+/// Rapresents the different directions we
+/// can take on the view.
 #[derive(Clone, Copy)]
 pub enum Direction {
     PageUp,
@@ -13,6 +15,8 @@ pub enum Direction {
     End,
 }
 
+/// Rapresents the commands on the editor that we
+/// support.
 #[derive(Clone, Copy)]
 pub enum EditorCommand {
     Move(Direction),
@@ -22,6 +26,9 @@ pub enum EditorCommand {
 
 impl TryFrom<Event> for EditorCommand {
     type Error = String;
+
+    /// Allows conversion from a crossterm `Event` to a `EditorCommand`
+    /// we support if it exists one.
     fn try_from(event: Event) -> Result<Self, Self::Error> {
         match event {
             Event::Key(KeyEvent {

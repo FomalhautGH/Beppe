@@ -13,6 +13,9 @@ pub struct Editor {
 }
 
 impl Editor {
+    /// Creates a new instance of the text editor
+    /// and sets a panic hook for terminating correcly
+    /// even when unwinding during panic.
     pub fn new() -> Result<Self, std::io::Error> {
         let default_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |panic_info| {
@@ -34,6 +37,9 @@ impl Editor {
         })
     }
 
+    /// Runs the editor with a infinite loop that reads
+    /// every event from keyboard, evaluates it and refreshes
+    /// the screen.
     pub fn run(&mut self) {
         loop {
             self.refresh_screen();
@@ -53,6 +59,7 @@ impl Editor {
         }
     }
 
+    /// Evaluates an event from the keyboard and resizing
     fn evaluate_event(&mut self, event: Event) {
         let should_process = match event {
             Event::Key(KeyEvent { kind, .. }) => kind == KeyEventKind::Press,
@@ -80,6 +87,7 @@ impl Editor {
         }
     }
 
+    /// Refreshes the screen in order to render correcly the events
     fn refresh_screen(&mut self) {
         let _ = Terminal::hide_cursor();
 
@@ -92,6 +100,9 @@ impl Editor {
 }
 
 impl Drop for Editor {
+    /// Destructor of the editor for terminating correcly when the
+    /// program finishes. Since it can possibly panic a panic hook is
+    /// also implemented.
     fn drop(&mut self) {
         let _ = Terminal::terminate();
         if self.should_quit {

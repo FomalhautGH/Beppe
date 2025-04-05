@@ -2,11 +2,15 @@ use super::grapheme::{GraphemeWidth, TextFragment};
 use std::ops::Range;
 use unicode_segmentation::UnicodeSegmentation;
 
+/// Rapresents a Line in our text with a
+/// Vector of `TextFragments`.
 pub struct Line {
     line: Vec<TextFragment>,
 }
 
 impl Line {
+    /// Converts the graphemes in the string to a Vector of
+    /// `TextFragmets` and creates a Line with it.
     pub fn from(line_str: &str) -> Self {
         let line: Vec<TextFragment> = line_str.graphemes(true).map(TextFragment::from).collect();
         Self { line }
@@ -16,6 +20,8 @@ impl Line {
         self.line.len()
     }
 
+    /// Calculates the width of the characters until a
+    /// specific index.
     pub fn width_until(&self, index: usize) -> usize {
         self.line
             .iter()
@@ -27,6 +33,8 @@ impl Line {
             .sum()
     }
 
+    /// It returs the String rapresenting the characters
+    /// visible in the supplied range.
     pub fn get(&self, range: Range<usize>) -> String {
         if range.start >= range.end {
             return String::new();

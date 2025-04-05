@@ -11,6 +11,9 @@ pub struct TerminalSize {
     pub height: usize,
 }
 
+/// If we imagine the terminal as an infinite grid where
+/// our cursor stays in one of the cells this struct rapresents
+/// exacly that.
 #[derive(Clone, Copy, Default)]
 pub struct Position {
     pub x: usize,
@@ -28,18 +31,23 @@ impl Position {
 
 pub struct Terminal;
 impl Terminal {
-    pub fn terminate() -> Result<(), std::io::Error> {
-        queue!(stdout(), terminal::LeaveAlternateScreen)?;
-        Self::show_cursor()?;
-        Self::execute()?;
-        disable_raw_mode()
-    }
-
+    /// Initializes the terminal entering the [raw mode](https://docs.rs/crossterm/0.28.1/crossterm/terminal/index.html#raw-mode)
+    /// and also entering the alternate screen in order to preserve
+    /// precedent output on the terminal (and for visualizing panic outputs)
     pub fn initialize() -> Result<(), std::io::Error> {
         enable_raw_mode()?;
         queue!(stdout(), terminal::EnterAlternateScreen)?;
         Self::clear_screen()?;
         Self::execute()
+    }
+
+    /// Terminates the terminal leaving the alternate screen and
+    /// disabling raw mode.
+    pub fn terminate() -> Result<(), std::io::Error> {
+        queue!(stdout(), terminal::LeaveAlternateScreen)?;
+        Self::show_cursor()?;
+        Self::execute()?;
+        disable_raw_mode()
     }
 
     pub fn clear_screen() -> Result<(), std::io::Error> {
@@ -67,12 +75,17 @@ impl Terminal {
         queue!(stdout(), style::Print(string))
     }
 
+    /// Prints a string on a specific row.
     pub fn print_row(row: usize, text: &str) -> Result<(), std::io::Error> {
         Self::move_cursor_to(Position { x: 0, y: row })?;
         Self::clear_line()?;
         Self::print(text)
     }
 
+    /// Executes the instructions waiting in the queue.
+    /// We do this becouse execute!() is inefficient since
+    /// writing is an expensive operation and we need to execute
+    /// the operations only after evalutating the keypresses.
     pub fn execute() -> Result<(), std::io::Error> {
         stdout().flush()
     }

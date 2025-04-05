@@ -14,3 +14,5 @@ fn main() {
     let mut beppe = Editor::new().unwrap();
     beppe.run();
 }
+
+// TODO: Make this an effective text editor

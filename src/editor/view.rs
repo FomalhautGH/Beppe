@@ -1,22 +1,34 @@
-use std::cmp;
-
 use super::{
     editor_cmd::{Direction, EditorCommand},
     terminal::{Position, TerminalSize},
 };
 use crate::editor::Terminal;
+use std::cmp;
 
 mod buffer;
 use buffer::Buffer;
-mod location;
-use line::Line;
-use location::Location;
-mod grapheme;
 mod line;
+use line::Line;
+mod grapheme;
 
 const EDITOR_NAME: &str = env!("CARGO_PKG_NAME");
 const EDITOR_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Rapresents a valid grapheme on the terminal, it is
+/// different from position since in only point to a valid
+/// character and not to a specific cell in the terminal.
+#[derive(Clone, Copy, Default)]
+pub struct Location {
+    pub grapheme_index: usize,
+    pub line_index: usize,
+}
+
+/// This struct rapresents what we are showing on the screen.
+/// The field `need_redraw` is needed for when something is changed
+/// on the screen and we need to refresh the screen, otherwise nothing
+/// is performed.
+/// The field `scroll_offset` is needed for enabling scrolling by tracking
+/// the offset Position of the origin (0, 0).
 pub struct View {
     buf: Buffer,
     needs_redraw: bool,
@@ -37,23 +49,9 @@ impl View {
         }
     }
 
-    pub fn cursor_position(&self) -> Position {
-        self.text_location_to_position()
-            .subtract(&self.scroll_offset)
-    }
-
-    pub fn resize(&mut self, size: TerminalSize) {
-        self.size = size;
-        self.needs_redraw = true;
-    }
-
-    pub fn load(&mut self, path: &str) {
-        if let Ok(buffer) = Buffer::load(path) {
-            self.buf = buffer;
-            self.needs_redraw = true;
-        }
-    }
-
+    /// In renders the content of the file on the screen with the respective offset
+    /// if it is present, otherwise is it gonna simply print
+    /// the name of the editor and the version.
     pub fn render(&mut self) {
         if !self.needs_redraw {
             return;
@@ -81,6 +79,31 @@ impl View {
         self.needs_redraw = false;
     }
 
+    /// Calculates the position of the cursor on the visible
+    /// screen subtracting the offset from the position.
+    /// (See struct Position definition)
+    pub fn cursor_position(&self) -> Position {
+        self.text_location_to_position()
+            .subtract(&self.scroll_offset)
+    }
+
+    /// When we resize the terminal we need to refresh what's
+    /// on the screen.
+    pub fn resize(&mut self, size: TerminalSize) {
+        self.size = size;
+        self.needs_redraw = true;
+    }
+
+    /// Loads the buffer with the content of the file we are
+    /// rendering.
+    pub fn load(&mut self, path: &str) {
+        if let Ok(buffer) = Buffer::load(path) {
+            self.buf = buffer;
+            self.needs_redraw = true;
+        }
+    }
+
+    /// Handles the `EditorCommand` sent to view.
     pub fn handle_command(&mut self, cmd: EditorCommand) {
         match cmd {
             EditorCommand::Move(cmd) => self.handle_movement(cmd),
@@ -89,6 +112,7 @@ impl View {
         }
     }
 
+    /// Handles the movement of view.
     pub fn handle_movement(&mut self, mov: Direction) {
         let height = self.size.height;
 
@@ -117,6 +141,8 @@ impl View {
         self.snap_to_valid_line();
     }
 
+    /// Enables moving to the right even when reached the end of the line
+    /// by moving down by 1.
     fn move_right(&mut self) {
         let line_num = self.buf.lines.len();
         let line_width = self
@@ -133,6 +159,8 @@ impl View {
         }
     }
 
+    /// Enables moving to the left even when reached the start of the line
+    /// by moving up by 1.
     fn move_left(&mut self) {
         if self.text_location.grapheme_index > 0 {
             self.text_location.grapheme_index = self.text_location.grapheme_index.saturating_sub(1);
@@ -155,6 +183,8 @@ impl View {
             .saturating_sub(1);
     }
 
+    /// Avoids the cursor going after the actual lenght of the line
+    /// counting the graphemes.
     fn snap_to_grapheme(&mut self) {
         self.text_location.grapheme_index = self
             .buf
@@ -168,11 +198,17 @@ impl View {
             });
     }
 
+    /// Avoids the cursor going after the actual height of the
+    /// entire file.
     fn snap_to_valid_line(&mut self) {
         self.text_location.line_index =
             cmp::min(self.text_location.line_index, self.buf.lines.len());
     }
 
+    /// Enables scrolling by converting the Location
+    /// to the Position and moving towards it.
+    /// If the `scroll_offset` is changed we then need to
+    /// refresh the screen by setting `needs_redraw` to `true`.
     fn scroll_location(&mut self) {
         let Position {
             x: current_row,
@@ -183,6 +219,8 @@ impl View {
         self.scroll_vertically(current_line);
     }
 
+    /// Sets the `scroll_offset` based on how much we are
+    /// far from the Position origin x coordinate.
     fn scroll_orizontally(&mut self, to: usize) {
         let width = self.size.width;
 
@@ -199,6 +237,8 @@ impl View {
         self.needs_redraw = self.needs_redraw || offset_changed;
     }
 
+    /// Sets the `scroll_offset` based on how much we are
+    /// far from the Position origin y coordinate.
     fn scroll_vertically(&mut self, to: usize) {
         let height = self.size.height;
 
@@ -215,11 +255,24 @@ impl View {
         self.needs_redraw = self.needs_redraw || offset_changed;
     }
 
+    /// Renders a single line on a specific row, in debug if something
+    /// goes wrong we report it by panicking.
     fn render_line(row_num: usize, line: &str) {
         let result = Terminal::print_row(row_num, line);
         debug_assert!(result.is_ok(), "Failed to render line.");
     }
 
+    /// Converts the current Location to the correspective Position
+    /// on the infinite grid.
+    fn text_location_to_position(&self) -> Position {
+        let y = self.text_location.line_index;
+        let x = self.buf.lines.get(y).map_or(0, |line| {
+            line.width_until(self.text_location.grapheme_index)
+        });
+        Position { x, y }
+    }
+
+    /// Draws the title screen.
     fn draw_title(row_num: usize, width: usize) {
         let msg = format!("{EDITOR_NAME}::{EDITOR_VERSION}");
 
@@ -231,13 +284,5 @@ impl View {
         msg.truncate(width);
 
         Self::render_line(row_num, &msg);
-    }
-
-    fn text_location_to_position(&self) -> Position {
-        let y = self.text_location.line_index;
-        let x = self.buf.lines.get(y).map_or(0, |line| {
-            line.width_until(self.text_location.grapheme_index)
-        });
-        Position { x, y }
     }
 }

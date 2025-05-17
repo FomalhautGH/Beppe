@@ -1,6 +1,38 @@
 use super::terminal::TerminalSize;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
+#[derive(Clone, Copy)]
+pub enum EditorCommandInsert {
+    ExitInsert,
+    Write(char),
+    Deletion,
+    Backspace,
+}
+
+impl TryFrom<Event> for EditorCommandInsert {
+    type Error = String;
+
+    fn try_from(event: Event) -> Result<Self, Self::Error> {
+        match event {
+            Event::Key(KeyEvent {
+                code, modifiers, ..
+            }) => match (code, modifiers) {
+                (KeyCode::Esc, _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
+                    Ok(EditorCommandInsert::ExitInsert)
+                }
+                (KeyCode::Backspace, _) => Ok(EditorCommandInsert::Backspace),
+                (KeyCode::Delete, _) => Ok(EditorCommandInsert::Deletion),
+                (KeyCode::Char(symbol), _) => Ok(EditorCommandInsert::Write(symbol)),
+                _ => Err(String::from("todo!")),
+            },
+
+            _ => Err(String::from(
+                "Event is not convertible in EditorCommandInsert",
+            )),
+        }
+    }
+}
+
 /// Rapresents the different directions we
 /// can take on the view.
 #[derive(Clone, Copy)]
@@ -21,6 +53,7 @@ pub enum Direction {
 pub enum EditorCommand {
     Move(Direction),
     Resize(TerminalSize),
+    EnterInsert,
     Quit,
 }
 
@@ -35,6 +68,7 @@ impl TryFrom<Event> for EditorCommand {
                 code, modifiers, ..
             }) => match (code, modifiers) {
                 (KeyCode::Char('q'), KeyModifiers::CONTROL) => Ok(Self::Quit),
+                (KeyCode::Char('i'), _) => Ok(Self::EnterInsert),
 
                 (KeyCode::Up | KeyCode::Char('k'), _) => Ok(Self::Move(Direction::Up)),
                 (KeyCode::Right | KeyCode::Char('l'), _) => Ok(Self::Move(Direction::Right)),

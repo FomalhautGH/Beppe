@@ -3,11 +3,19 @@ mod terminal;
 mod view;
 
 use crossterm::event::{Event, KeyEvent, KeyEventKind, read};
-use editor_cmd::EditorCommand;
+use editor_cmd::{EditorCommand, EditorCommandInsert};
 use terminal::Terminal;
 use view::View;
 
+#[derive(Clone, Copy)]
+pub enum EditorMode {
+    Normal,
+    Insert,
+}
+
 pub struct Editor {
+    mode: EditorMode,
+    switched_mode: bool,
     should_quit: bool,
     view: View,
 }
@@ -32,7 +40,9 @@ impl Editor {
         }
 
         Ok(Self {
+            mode: EditorMode::Normal,
             should_quit: false,
+            switched_mode: false,
             view,
         })
     }
@@ -68,17 +78,16 @@ impl Editor {
         };
 
         if should_process {
-            match EditorCommand::try_from(event) {
-                Ok(cmd) => {
-                    if matches!(cmd, EditorCommand::Quit) {
-                        self.should_quit = true;
-                    } else {
-                        self.view.handle_command(cmd);
+            match self.mode {
+                EditorMode::Normal => {
+                    if let Ok(cmd) = EditorCommand::try_from(event) {
+                        self.process_command(cmd);
                     }
                 }
-                Err(err) => {
-                    #[cfg(debug_assertions)]
-                    panic!("Event could not be converted into a editor command: {err}\n");
+                EditorMode::Insert => {
+                    if let Ok(cmd) = EditorCommandInsert::try_from(event) {
+                        self.process_insertion(cmd);
+                    }
                 }
             }
         } else {
@@ -87,12 +96,42 @@ impl Editor {
         }
     }
 
+    fn process_insertion(&mut self, cmd: EditorCommandInsert) {
+        match cmd {
+            EditorCommandInsert::Write(symbol) => self.view.handle_insertion(symbol),
+            EditorCommandInsert::ExitInsert => {
+                self.mode = EditorMode::Normal;
+                self.switched_mode = true;
+            }
+            EditorCommandInsert::Deletion => self.view.handle_deletion(),
+            EditorCommandInsert::Backspace => self.view.handle_backspace(),
+        }
+    }
+
+    fn process_command(&mut self, cmd: EditorCommand) {
+        match cmd {
+            EditorCommand::Quit => self.should_quit = true,
+            EditorCommand::EnterInsert => {
+                self.mode = EditorMode::Insert;
+                self.switched_mode = true;
+            }
+            _ => self.view.handle_command(cmd),
+        }
+    }
+
     /// Refreshes the screen in order to render correcly the events
     fn refresh_screen(&mut self) {
         let _ = Terminal::hide_cursor();
 
-        self.view.render();
+        if self.switched_mode {
+            let _ = match self.mode {
+                EditorMode::Normal => Terminal::cursor_block(),
+                EditorMode::Insert => Terminal::cursor_bar(),
+            };
+            self.switched_mode = false;
+        }
 
+        self.view.render();
         let _ = Terminal::move_cursor_to(self.view.cursor_position());
         let _ = Terminal::show_cursor();
         let _ = Terminal::execute();
@@ -105,6 +144,7 @@ impl Drop for Editor {
     /// also implemented.
     fn drop(&mut self) {
         let _ = Terminal::terminate();
+        let _ = Terminal::cursor_block();
         if self.should_quit {
             Terminal::print("Goodbye.\r\n").unwrap();
         }

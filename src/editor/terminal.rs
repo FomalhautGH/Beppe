@@ -63,6 +63,14 @@ impl Terminal {
         queue!(stdout(), cursor::MoveTo(x, y))
     }
 
+    pub fn cursor_bar() -> Result<(), std::io::Error> {
+        queue!(stdout(), cursor::SetCursorStyle::SteadyBar)
+    }
+
+    pub fn cursor_block() -> Result<(), std::io::Error> {
+        queue!(stdout(), cursor::SetCursorStyle::SteadyBlock)
+    }
+
     pub fn hide_cursor() -> Result<(), std::io::Error> {
         queue!(stdout(), cursor::Hide)
     }

@@ -1,5 +1,5 @@
 use super::grapheme::{GraphemeWidth, TextFragment};
-use std::ops::Range;
+use std::{fmt::Display, ops::Range};
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Rapresents a Line in our text with a
@@ -14,23 +14,6 @@ impl Line {
     pub fn from(line_str: &str) -> Self {
         let line: Vec<TextFragment> = line_str.graphemes(true).map(TextFragment::from).collect();
         Self { line }
-    }
-
-    pub fn grapheme_count(&self) -> usize {
-        self.line.len()
-    }
-
-    /// Calculates the width of the characters until a
-    /// specific index.
-    pub fn width_until(&self, index: usize) -> usize {
-        self.line
-            .iter()
-            .take(index)
-            .map(|fragment| match fragment.width() {
-                GraphemeWidth::Half | GraphemeWidth::Zero => 1,
-                GraphemeWidth::Full => 2,
-            })
-            .sum()
     }
 
     /// It returs the String rapresenting the characters
@@ -64,5 +47,47 @@ impl Line {
         }
 
         result
+    }
+    
+    pub fn append(&mut self, other: &Self) {
+        let mut line = self.to_string();
+        let other = other.to_string();
+        line.push_str(&other);
+        *self = Self::from(&line);
+    }
+
+    pub fn is_valid_index(&self, index: usize) -> bool {
+        self.line.get(index).is_some()
+    }
+
+    /// Calculates the width of the characters until a
+    /// specific index.
+    pub fn width_until(&self, index: usize) -> usize {
+        self.line
+            .iter()
+            .take(index)
+            .map(|fragment| match fragment.width() {
+                GraphemeWidth::Half | GraphemeWidth::Zero => 1,
+                GraphemeWidth::Full => 2,
+            })
+            .sum()
+    }
+
+    pub fn insert_at(&mut self, index: usize, tf: TextFragment) {
+        self.line.insert(index, tf);
+    }
+
+    pub fn remove_at(&mut self, index: usize) -> TextFragment {
+        self.line.remove(index)
+    }
+
+    pub fn grapheme_count(&self) -> usize {
+        self.line.len()
+    }
+}
+
+impl Display for Line {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.get(0..self.line.len()))
     }
 }

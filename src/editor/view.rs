@@ -8,6 +8,8 @@ use std::cmp;
 mod buffer;
 use buffer::Buffer;
 mod line;
+use crossterm::cursor;
+use grapheme::TextFragment;
 use line::Line;
 mod grapheme;
 
@@ -108,7 +110,80 @@ impl View {
         match cmd {
             EditorCommand::Move(cmd) => self.handle_movement(cmd),
             EditorCommand::Resize(size) => self.resize(size),
-            EditorCommand::Quit => unreachable!(),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn handle_insertion(&mut self, sy: char) {
+        let old_len = self
+            .buf
+            .lines
+            .get(self.text_location.line_index)
+            .map_or(0, Line::grapheme_count);
+
+        let text = &format!("{sy}");
+
+        if let Some(line) = self.buf.lines.get_mut(self.text_location.line_index) {
+            let index = self.text_location.grapheme_index;
+            line.insert_at(index, TextFragment::from(text));
+        } else {
+            self.buf.lines.push(Line::from(text));
+        }
+
+        let new_len = self
+            .buf
+            .lines
+            .get(self.text_location.line_index)
+            .map_or(0, Line::grapheme_count);
+
+        self.needs_redraw = true;
+
+        #[allow(clippy::arithmetic_side_effects)]
+        if new_len - old_len > 0 {
+            self.move_right();
+        }
+    }
+
+    pub fn handle_backspace(&mut self) {
+        if self.text_location.line_index != 0 || self.text_location.grapheme_index != 0 {
+            let went_up = self.text_location.grapheme_index == 0;
+            self.move_left();
+            if went_up {
+                let current_line = self.current_line(0).unwrap().to_string();
+
+                #[allow(clippy::arithmetic_side_effects)]
+                if !current_line.is_empty() {
+                    self.text_location.grapheme_index += 1;
+                }
+
+                self.append_next_line();
+            } else {
+                self.handle_deletion();
+            }
+        }
+    }
+
+    pub fn handle_deletion(&mut self) {
+        if self.text_location.line_index != self.buf.lines.len() {
+            if let Some(line) = self.buf.lines.get_mut(self.text_location.line_index) {
+            self.needs_redraw = true;
+                let current_index = self.text_location.grapheme_index;
+                if line.is_valid_index(current_index) {
+                    let _ = line.remove_at(current_index);
+                } else {
+                    self.append_next_line();
+                }
+            }
+        }
+    }
+
+    fn append_next_line(&mut self) {
+        if self.current_line(1).is_some() {
+            #[allow(clippy::arithmetic_side_effects)]
+            let next_line = self.buf.lines.remove(self.text_location.line_index + 1);
+            let current_line = self.current_line_mut(0).unwrap();
+            current_line.append(&next_line);
+            self.needs_redraw = true;
         }
     }
 
@@ -128,6 +203,16 @@ impl View {
         }
 
         self.scroll_location();
+    }
+
+    fn current_line_mut(&mut self, offset: usize) -> Option<&mut Line> {
+        let index = self.text_location.line_index.saturating_add(offset);
+        self.buf.lines.get_mut(index)
+    }
+
+    fn current_line(&self, offset: usize) -> Option<&Line> {
+        let index = self.text_location.line_index.saturating_add(offset);
+        self.buf.lines.get(index)
     }
 
     fn move_up_by(&mut self, count: usize) {
@@ -151,7 +236,7 @@ impl View {
             .get(self.text_location.line_index)
             .map_or(0, Line::grapheme_count);
 
-        if self.text_location.grapheme_index < line_width.saturating_sub(1) {
+        if self.text_location.grapheme_index < line_width {
             self.text_location.grapheme_index = self.text_location.grapheme_index.saturating_add(1);
         } else if self.text_location.line_index < line_num {
             self.move_down_by(1);

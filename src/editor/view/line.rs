@@ -4,6 +4,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 /// Rapresents a Line in our text with a
 /// Vector of `TextFragments`.
+#[derive(Default)]
 pub struct Line {
     line: Vec<TextFragment>,
 }
@@ -48,16 +49,22 @@ impl Line {
 
         result
     }
-    
+
+    // https://doc.rust-lang.org/std/vec/struct.Vec.html#method.split_off
+    pub fn split_off(&mut self, at: usize) -> Self {
+        if at > self.line.len() {
+            Self::default()
+        } else {
+            let rem = self.line.split_off(at);
+            Self { line: rem }
+        }
+    }
+
     pub fn append(&mut self, other: &Self) {
         let mut line = self.to_string();
         let other = other.to_string();
         line.push_str(&other);
         *self = Self::from(&line);
-    }
-
-    pub fn is_valid_index(&self, index: usize) -> bool {
-        self.line.get(index).is_some()
     }
 
     /// Calculates the width of the characters until a
@@ -73,8 +80,8 @@ impl Line {
             .sum()
     }
 
-    pub fn insert_at(&mut self, index: usize, tf: TextFragment) {
-        self.line.insert(index, tf);
+    pub fn insert_char_at(&mut self, index: usize, tf: char) {
+        self.line.insert(index, TextFragment::from(&tf.to_string()));
     }
 
     pub fn remove_at(&mut self, index: usize) -> TextFragment {
@@ -88,6 +95,12 @@ impl Line {
 
 impl Display for Line {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.get(0..self.line.len()))
+        let result: String = self
+            .line
+            .iter()
+            .map(TextFragment::grapheme)
+            .collect();
+
+        write!(f, "{result}")
     }
 }

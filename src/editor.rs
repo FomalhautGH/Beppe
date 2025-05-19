@@ -99,17 +99,19 @@ impl Editor {
     fn process_insertion(&mut self, cmd: EditorCommandInsert) {
         match cmd {
             EditorCommandInsert::Write(symbol) => self.view.handle_insertion(symbol),
+            EditorCommandInsert::Enter => self.view.handle_enter(),
+            EditorCommandInsert::Deletion => self.view.handle_deletion(),
+            EditorCommandInsert::Backspace => self.view.handle_backspace(),
             EditorCommandInsert::ExitInsert => {
                 self.mode = EditorMode::Normal;
                 self.switched_mode = true;
             }
-            EditorCommandInsert::Deletion => self.view.handle_deletion(),
-            EditorCommandInsert::Backspace => self.view.handle_backspace(),
         }
     }
 
     fn process_command(&mut self, cmd: EditorCommand) {
         match cmd {
+            EditorCommand::Save => self.view.save(),
             EditorCommand::Quit => self.should_quit = true,
             EditorCommand::EnterInsert => {
                 self.mode = EditorMode::Insert;

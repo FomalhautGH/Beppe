@@ -5,6 +5,7 @@ use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 pub enum EditorCommandInsert {
     ExitInsert,
     Write(char),
+    Enter,
     Deletion,
     Backspace,
 }
@@ -23,6 +24,8 @@ impl TryFrom<Event> for EditorCommandInsert {
                 (KeyCode::Backspace, _) => Ok(EditorCommandInsert::Backspace),
                 (KeyCode::Delete, _) => Ok(EditorCommandInsert::Deletion),
                 (KeyCode::Char(symbol), _) => Ok(EditorCommandInsert::Write(symbol)),
+                (KeyCode::Tab, _) => Ok(EditorCommandInsert::Write('\t')),
+                (KeyCode::Enter, _) => Ok(EditorCommandInsert::Enter),
                 _ => Err(String::from("todo!")),
             },
 
@@ -54,6 +57,7 @@ pub enum EditorCommand {
     Move(Direction),
     Resize(TerminalSize),
     EnterInsert,
+    Save,
     Quit,
 }
 
@@ -67,6 +71,7 @@ impl TryFrom<Event> for EditorCommand {
             Event::Key(KeyEvent {
                 code, modifiers, ..
             }) => match (code, modifiers) {
+                (KeyCode::Char('s'), KeyModifiers::CONTROL) => Ok(Self::Save),
                 (KeyCode::Char('q'), KeyModifiers::CONTROL) => Ok(Self::Quit),
                 (KeyCode::Char('i'), _) => Ok(Self::EnterInsert),
 

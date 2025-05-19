@@ -16,3 +16,4 @@ fn main() {
 }
 
 // TODO: Make this an effective text editor
+// TODO: Use ropes data structure for text https://docs.rs/ropey/latest/ropey/#

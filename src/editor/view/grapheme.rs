@@ -39,7 +39,7 @@ impl TextFragment {
 
             1 => {
                 if matches!(grapheme, "\t") {
-                    (GraphemeWidth::Half, Some(' '))
+                    (GraphemeWidth::Half, Some('→'))
                 } else if owned_grapheme.trim().is_empty() {
                     (GraphemeWidth::Half, Some('␣'))
                 } else {

@@ -8,8 +8,6 @@ use std::cmp;
 mod buffer;
 use buffer::Buffer;
 mod line;
-use crossterm::cursor;
-use grapheme::TextFragment;
 use line::Line;
 mod grapheme;
 
@@ -32,7 +30,7 @@ pub struct Location {
 /// The field `scroll_offset` is needed for enabling scrolling by tracking
 /// the offset Position of the origin (0, 0).
 pub struct View {
-    buf: Buffer,
+    buffer: Buffer,
     needs_redraw: bool,
     size: TerminalSize,
 
@@ -44,7 +42,7 @@ impl View {
     pub fn new() -> Self {
         View {
             needs_redraw: true,
-            buf: Buffer::default(),
+            buffer: Buffer::default(),
             size: Terminal::size().unwrap_or_default(),
             text_location: Location::default(),
             scroll_offset: Position::default(),
@@ -69,9 +67,9 @@ impl View {
 
         let (sx, sy) = (self.scroll_offset.x, self.scroll_offset.y);
         for i in 0..height {
-            if let Some(line) = self.buf.lines.get(i.saturating_add(sy)) {
+            if let Some(line) = self.buffer.lines.get(i.saturating_add(sy)) {
                 Self::render_line(i, &line.get(sx..sx.saturating_add(width)));
-            } else if vertical_center == i && self.buf.is_empty() {
+            } else if vertical_center == i && self.buffer.is_empty() {
                 Self::draw_title(i, width);
             } else {
                 Self::render_line(i, "~");
@@ -100,7 +98,7 @@ impl View {
     /// rendering.
     pub fn load(&mut self, path: &str) {
         if let Ok(buffer) = Buffer::load(path) {
-            self.buf = buffer;
+            self.buffer = buffer;
             self.needs_redraw = true;
         }
     }
@@ -114,77 +112,46 @@ impl View {
         }
     }
 
+    fn current_line_len(&self) -> usize {
+        self.buffer
+            .lines
+            .get(self.text_location.line_index)
+            .map_or(0, Line::grapheme_count)
+    }
+
     pub fn handle_insertion(&mut self, sy: char) {
-        let old_len = self
-            .buf
-            .lines
-            .get(self.text_location.line_index)
-            .map_or(0, Line::grapheme_count);
-
-        let text = &format!("{sy}");
-
-        if let Some(line) = self.buf.lines.get_mut(self.text_location.line_index) {
-            let index = self.text_location.grapheme_index;
-            line.insert_at(index, TextFragment::from(text));
-        } else {
-            self.buf.lines.push(Line::from(text));
-        }
-
-        let new_len = self
-            .buf
-            .lines
-            .get(self.text_location.line_index)
-            .map_or(0, Line::grapheme_count);
-
-        self.needs_redraw = true;
+        let old_len = self.current_line_len();
+        self.buffer.insert_char(sy, self.text_location);
+        let new_len = self.current_line_len();
 
         #[allow(clippy::arithmetic_side_effects)]
         if new_len - old_len > 0 {
-            self.move_right();
+            self.handle_movement(Direction::Right);
+            self.needs_redraw = true;
         }
     }
 
     pub fn handle_backspace(&mut self) {
         if self.text_location.line_index != 0 || self.text_location.grapheme_index != 0 {
-            let went_up = self.text_location.grapheme_index == 0;
-            self.move_left();
-            if went_up {
-                let current_line = self.current_line(0).unwrap().to_string();
-
-                #[allow(clippy::arithmetic_side_effects)]
-                if !current_line.is_empty() {
-                    self.text_location.grapheme_index += 1;
-                }
-
-                self.append_next_line();
-            } else {
-                self.handle_deletion();
-            }
+            self.handle_movement(Direction::Left);
+            self.handle_deletion();
         }
     }
 
     pub fn handle_deletion(&mut self) {
-        if self.text_location.line_index != self.buf.lines.len() {
-            if let Some(line) = self.buf.lines.get_mut(self.text_location.line_index) {
-            self.needs_redraw = true;
-                let current_index = self.text_location.grapheme_index;
-                if line.is_valid_index(current_index) {
-                    let _ = line.remove_at(current_index);
-                } else {
-                    self.append_next_line();
-                }
-            }
-        }
+        self.buffer.delete(self.text_location);
+        self.needs_redraw = true;
     }
 
-    fn append_next_line(&mut self) {
-        if self.current_line(1).is_some() {
-            #[allow(clippy::arithmetic_side_effects)]
-            let next_line = self.buf.lines.remove(self.text_location.line_index + 1);
-            let current_line = self.current_line_mut(0).unwrap();
-            current_line.append(&next_line);
-            self.needs_redraw = true;
-        }
+    pub fn save(&self) {
+        let _ = self.buffer.save();
+    }
+
+    pub fn handle_enter(&mut self) {
+        self.buffer.insert_newline(self.text_location);
+        self.handle_movement(Direction::Down);
+        self.handle_movement(Direction::Home);
+        self.needs_redraw = true;
     }
 
     /// Handles the movement of view.
@@ -205,16 +172,6 @@ impl View {
         self.scroll_location();
     }
 
-    fn current_line_mut(&mut self, offset: usize) -> Option<&mut Line> {
-        let index = self.text_location.line_index.saturating_add(offset);
-        self.buf.lines.get_mut(index)
-    }
-
-    fn current_line(&self, offset: usize) -> Option<&Line> {
-        let index = self.text_location.line_index.saturating_add(offset);
-        self.buf.lines.get(index)
-    }
-
     fn move_up_by(&mut self, count: usize) {
         self.text_location.line_index = self.text_location.line_index.saturating_sub(count);
         self.snap_to_grapheme();
@@ -229,9 +186,9 @@ impl View {
     /// Enables moving to the right even when reached the end of the line
     /// by moving down by 1.
     fn move_right(&mut self) {
-        let line_num = self.buf.lines.len();
+        let line_num = self.buffer.lines.len();
         let line_width = self
-            .buf
+            .buffer
             .lines
             .get(self.text_location.line_index)
             .map_or(0, Line::grapheme_count);
@@ -261,18 +218,17 @@ impl View {
 
     fn move_end_of_line(&mut self) {
         self.text_location.grapheme_index = self
-            .buf
+            .buffer
             .lines
             .get(self.text_location.line_index)
-            .map_or(0, Line::grapheme_count)
-            .saturating_sub(1);
+            .map_or(0, Line::grapheme_count);
     }
 
     /// Avoids the cursor going after the actual lenght of the line
     /// counting the graphemes.
     fn snap_to_grapheme(&mut self) {
         self.text_location.grapheme_index = self
-            .buf
+            .buffer
             .lines
             .get(self.text_location.line_index)
             .map_or(0, |line| {
@@ -287,7 +243,7 @@ impl View {
     /// entire file.
     fn snap_to_valid_line(&mut self) {
         self.text_location.line_index =
-            cmp::min(self.text_location.line_index, self.buf.lines.len());
+            cmp::min(self.text_location.line_index, self.buffer.lines.len());
     }
 
     /// Enables scrolling by converting the Location
@@ -351,7 +307,7 @@ impl View {
     /// on the infinite grid.
     fn text_location_to_position(&self) -> Position {
         let y = self.text_location.line_index;
-        let x = self.buf.lines.get(y).map_or(0, |line| {
+        let x = self.buffer.lines.get(y).map_or(0, |line| {
             line.width_until(self.text_location.grapheme_index)
         });
         Position { x, y }

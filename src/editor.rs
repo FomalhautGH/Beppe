@@ -1,16 +1,37 @@
 mod editor_cmd;
+mod status_bar;
 mod terminal;
 mod view;
+
+use std::fmt::{Debug, Display};
 
 use crossterm::event::{Event, KeyEvent, KeyEventKind, read};
 use editor_cmd::{EditorCommand, EditorCommandInsert};
 use terminal::Terminal;
 use view::View;
 
-#[derive(Clone, Copy)]
+use crate::editor::status_bar::StatusBar;
+
+const BARS_COUNT: usize = 2;
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub enum EditorMode {
+    #[default]
     Normal,
     Insert,
+}
+
+impl Display for EditorMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match &self {
+                EditorMode::Normal => "NORMAL",
+                EditorMode::Insert => "INSERT",
+            }
+        )
+    }
 }
 
 pub struct Editor {
@@ -18,6 +39,28 @@ pub struct Editor {
     switched_mode: bool,
     should_quit: bool,
     view: View,
+    status_bar: StatusBar,
+}
+
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct DocumentStatus {
+    file_name: Option<String>,
+    num_of_lines: usize,
+    current_line: usize,
+    modified: bool,
+}
+
+impl Debug for DocumentStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {} {} {}",
+            self.file_name.clone().unwrap_or("[No Name]".to_string()),
+            self.num_of_lines,
+            self.current_line,
+            self.modified
+        )
+    }
 }
 
 impl Editor {
@@ -32,10 +75,11 @@ impl Editor {
         }));
 
         Terminal::initialize()?;
+        let mut view = View::new(BARS_COUNT);
 
-        let mut view = View::new();
         let args: Vec<String> = std::env::args().collect();
-        if let Some(path) = args.get(1) {
+        let file_name = args.get(1);
+        if let Some(path) = file_name {
             view.load(path);
         }
 
@@ -44,6 +88,7 @@ impl Editor {
             should_quit: false,
             switched_mode: false,
             view,
+            status_bar: StatusBar::new(BARS_COUNT),
         })
     }
 
@@ -119,6 +164,10 @@ impl Editor {
             }
             _ => self.view.handle_command(cmd),
         }
+
+        if let EditorCommand::Resize(size) = cmd {
+            self.status_bar.resize(size);
+        }
     }
 
     /// Refreshes the screen in order to render correcly the events
@@ -134,6 +183,10 @@ impl Editor {
         }
 
         self.view.render();
+        self.status_bar.update_status(self.view.get_status());
+        self.status_bar.update_editor_mode(self.mode);
+        self.status_bar.render();
+
         let _ = Terminal::move_cursor_to(self.view.cursor_position());
         let _ = Terminal::show_cursor();
         let _ = Terminal::execute();

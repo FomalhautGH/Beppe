@@ -2,7 +2,7 @@ use super::{
     editor_cmd::{Direction, EditorCommand},
     terminal::{Position, TerminalSize},
 };
-use crate::editor::Terminal;
+use crate::editor::{DocumentStatus, Terminal};
 use std::cmp;
 
 mod buffer;
@@ -39,11 +39,17 @@ pub struct View {
 }
 
 impl View {
-    pub fn new() -> Self {
+    pub fn new(margin_bottom: usize) -> Self {
+        let size = Terminal::size().unwrap_or_default();
+        let size = TerminalSize {
+            width: size.width,
+            height: size.height.saturating_sub(margin_bottom),
+        };
+
         View {
+            size,
             needs_redraw: true,
             buffer: Buffer::default(),
-            size: Terminal::size().unwrap_or_default(),
             text_location: Location::default(),
             scroll_offset: Position::default(),
         }
@@ -97,17 +103,15 @@ impl View {
     /// Loads the buffer with the content of the file we are
     /// rendering.
     pub fn load(&mut self, path: &str) {
-        if let Ok(buffer) = Buffer::load(path) {
-            self.buffer = buffer;
-            self.needs_redraw = true;
-        }
+        self.buffer = Buffer::load(path);
+        self.needs_redraw = true;
     }
 
     /// Handles the `EditorCommand` sent to view.
     pub fn handle_command(&mut self, cmd: EditorCommand) {
         match cmd {
             EditorCommand::Move(cmd) => self.handle_movement(cmd),
-            EditorCommand::Resize(size) => self.resize(size),
+            EditorCommand::Resize(cmd) => self.resize(cmd),
             _ => unreachable!(),
         }
     }
@@ -143,7 +147,7 @@ impl View {
         self.needs_redraw = true;
     }
 
-    pub fn save(&self) {
+    pub fn save(&mut self) {
         let _ = self.buffer.save();
     }
 
@@ -325,5 +329,14 @@ impl View {
         msg.truncate(width);
 
         Self::render_line(row_num, &msg);
+    }
+
+    pub fn get_status(&self) -> DocumentStatus {
+        DocumentStatus {
+            file_name: self.buffer.file_name.clone(),
+            num_of_lines: self.buffer.height(),
+            current_line: self.text_location.line_index.saturating_add(1),
+            modified: self.buffer.is_dirty(),
+        }
     }
 }

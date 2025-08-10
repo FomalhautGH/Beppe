@@ -95,11 +95,7 @@ impl Line {
 
 impl Display for Line {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let result: String = self
-            .line
-            .iter()
-            .map(TextFragment::grapheme)
-            .collect();
+        let result: String = self.line.iter().map(TextFragment::grapheme).collect();
 
         write!(f, "{result}")
     }

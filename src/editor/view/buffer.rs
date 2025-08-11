@@ -1,3 +1,5 @@
+use crate::editor::file_info::FileInfo;
+
 use super::{Location, line::Line};
 use std::{
     fs::{self, File},
@@ -7,7 +9,7 @@ use std::{
 #[derive(Default)]
 pub struct Buffer {
     pub lines: Vec<Line>,
-    pub file_name: Option<String>,
+    pub file_info: FileInfo,
     dirty: bool,
 }
 
@@ -21,14 +23,14 @@ impl Buffer {
 
         Self {
             lines,
-            file_name: Some(file_path.to_string()),
+            file_info: FileInfo::from(file_path),
             dirty: false,
         }
     }
 
     pub fn save(&mut self) -> Result<(), Error> {
-        if let Some(file_name) = &self.file_name {
-            let mut file = File::create(file_name)?;
+        if let Some(file_path) = &self.file_info.path {
+            let mut file = File::create(file_path)?;
             for line in &self.lines {
                 writeln!(&mut file, "{line}")?;
             }

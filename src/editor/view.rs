@@ -2,7 +2,7 @@ use super::{
     editor_cmd::{Direction, EditorCommand},
     terminal::{Position, TerminalSize},
 };
-use crate::editor::{DocumentStatus, Terminal};
+use crate::editor::{Terminal, document_status::DocumentStatus};
 use std::cmp;
 
 mod buffer;
@@ -33,6 +33,7 @@ pub struct View {
     buffer: Buffer,
     needs_redraw: bool,
     size: TerminalSize,
+    margin_bottom: usize,
 
     text_location: Location,
     scroll_offset: Position,
@@ -48,6 +49,7 @@ impl View {
 
         View {
             size,
+            margin_bottom,
             needs_redraw: true,
             buffer: Buffer::default(),
             text_location: Location::default(),
@@ -59,7 +61,7 @@ impl View {
     /// if it is present, otherwise is it gonna simply print
     /// the name of the editor and the version.
     pub fn render(&mut self) {
-        if !self.needs_redraw {
+        if !self.needs_redraw || self.size.height == 0 {
             return;
         }
 
@@ -76,7 +78,8 @@ impl View {
             if let Some(line) = self.buffer.lines.get(i.saturating_add(sy)) {
                 Self::render_line(i, &line.get(sx..sx.saturating_add(width)));
             } else if vertical_center == i && self.buffer.is_empty() {
-                Self::draw_title(i, width);
+                let title = Self::build_title(width);
+                Self::render_line(i, &title);
             } else {
                 Self::render_line(i, "~");
             }
@@ -96,7 +99,8 @@ impl View {
     /// When we resize the terminal we need to refresh what's
     /// on the screen.
     pub fn resize(&mut self, size: TerminalSize) {
-        self.size = size;
+        self.size.width = size.width;
+        self.size.height = size.height.saturating_sub(self.margin_bottom);
         self.needs_redraw = true;
     }
 
@@ -110,8 +114,8 @@ impl View {
     /// Handles the `EditorCommand` sent to view.
     pub fn handle_command(&mut self, cmd: EditorCommand) {
         match cmd {
-            EditorCommand::Move(cmd) => self.handle_movement(cmd),
-            EditorCommand::Resize(cmd) => self.resize(cmd),
+            EditorCommand::Move(mov) => self.handle_movement(mov),
+            EditorCommand::Resize(size) => self.resize(size),
             _ => unreachable!(),
         }
     }
@@ -318,24 +322,28 @@ impl View {
     }
 
     /// Draws the title screen.
-    fn draw_title(row_num: usize, width: usize) {
+    fn build_title(width: usize) -> String {
+        if width == 0 {
+            return String::new();
+        }
+
         let msg = format!("{EDITOR_NAME}::{EDITOR_VERSION}");
+        let len = msg.len();
+        let width_sub1 = width.saturating_sub(1);
 
-        #[allow(clippy::integer_division)]
-        let padding = (width.saturating_sub(msg.len())) / 2;
-        let padding = " ".repeat(padding.saturating_sub(1));
+        // If the title doesn't fit we simply hide the title screen
+        if width_sub1 < len {
+            return String::from("~");
+        }
 
-        let mut msg = format!("~{padding}{msg}");
-        msg.truncate(width);
-
-        Self::render_line(row_num, &msg);
+        format!("{:<}{:^width_sub1$}", "~", msg)
     }
 
     pub fn get_status(&self) -> DocumentStatus {
         DocumentStatus {
-            file_name: self.buffer.file_name.clone(),
+            file_name: self.buffer.file_info.to_string(),
             num_of_lines: self.buffer.height(),
-            current_line: self.text_location.line_index.saturating_add(1),
+            current_line: self.text_location.line_index,
             modified: self.buffer.is_dirty(),
         }
     }

@@ -1,9 +1,11 @@
+mod document_status;
 mod editor_cmd;
+mod file_info;
 mod status_bar;
 mod terminal;
 mod view;
 
-use std::fmt::{Debug, Display};
+use std::fmt::Display;
 
 use crossterm::event::{Event, KeyEvent, KeyEventKind, read};
 use editor_cmd::{EditorCommand, EditorCommandInsert};
@@ -42,27 +44,6 @@ pub struct Editor {
     status_bar: StatusBar,
 }
 
-#[derive(Clone, Default, PartialEq, Eq)]
-pub struct DocumentStatus {
-    file_name: Option<String>,
-    num_of_lines: usize,
-    current_line: usize,
-    modified: bool,
-}
-
-impl Debug for DocumentStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} {} {} {}",
-            self.file_name.clone().unwrap_or("[No Name]".to_string()),
-            self.num_of_lines,
-            self.current_line,
-            self.modified
-        )
-    }
-}
-
 impl Editor {
     /// Creates a new instance of the text editor
     /// and sets a panic hook for terminating correcly
@@ -81,6 +62,7 @@ impl Editor {
         let file_name = args.get(1);
         if let Some(path) = file_name {
             view.load(path);
+            Terminal::set_title(path)?;
         }
 
         Ok(Self {
@@ -170,6 +152,12 @@ impl Editor {
         }
     }
 
+    fn refresh_status_bar(&mut self) {
+        self.status_bar.update_status(self.view.get_status());
+        self.status_bar.update_editor_mode(self.mode);
+        self.status_bar.render();
+    }
+
     /// Refreshes the screen in order to render correcly the events
     fn refresh_screen(&mut self) {
         let _ = Terminal::hide_cursor();
@@ -183,9 +171,7 @@ impl Editor {
         }
 
         self.view.render();
-        self.status_bar.update_status(self.view.get_status());
-        self.status_bar.update_editor_mode(self.mode);
-        self.status_bar.render();
+        self.refresh_status_bar();
 
         let _ = Terminal::move_cursor_to(self.view.cursor_position());
         let _ = Terminal::show_cursor();

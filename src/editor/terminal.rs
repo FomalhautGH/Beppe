@@ -1,6 +1,7 @@
 use crossterm::cursor;
 use crossterm::queue;
 use crossterm::style;
+use crossterm::style::Attribute;
 use crossterm::terminal::{self, ClearType, disable_raw_mode, enable_raw_mode, size};
 use std::io::Write;
 use std::io::stdout;
@@ -36,7 +37,11 @@ impl Terminal {
     /// precedent output on the terminal (and for visualizing panic outputs)
     pub fn initialize() -> Result<(), std::io::Error> {
         enable_raw_mode()?;
-        queue!(stdout(), terminal::EnterAlternateScreen)?;
+        queue!(
+            stdout(),
+            terminal::EnterAlternateScreen,
+            terminal::DisableLineWrap
+        )?;
         Self::clear_screen()?;
         Self::execute()
     }
@@ -44,10 +49,18 @@ impl Terminal {
     /// Terminates the terminal leaving the alternate screen and
     /// disabling raw mode.
     pub fn terminate() -> Result<(), std::io::Error> {
-        queue!(stdout(), terminal::LeaveAlternateScreen)?;
+        queue!(
+            stdout(),
+            terminal::EnableLineWrap,
+            terminal::LeaveAlternateScreen
+        )?;
         Self::show_cursor()?;
         Self::execute()?;
         disable_raw_mode()
+    }
+
+    pub fn set_title(title: &str) -> Result<(), std::io::Error> {
+        queue!(stdout(), terminal::SetTitle(title))
     }
 
     pub fn clear_screen() -> Result<(), std::io::Error> {
@@ -81,6 +94,13 @@ impl Terminal {
 
     pub fn print(string: &str) -> Result<(), std::io::Error> {
         queue!(stdout(), style::Print(string))
+    }
+
+    pub fn print_inverted_row(row: usize, text: &str) -> Result<(), std::io::Error> {
+        Self::move_cursor_to(Position { x: 0, y: row })?;
+        Self::clear_line()?;
+        let string = &format!("{}{}{}", Attribute::Reverse, text, Attribute::Reset);
+        Self::print(string)
     }
 
     /// Prints a string on a specific row.

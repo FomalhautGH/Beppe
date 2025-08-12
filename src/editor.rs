@@ -7,7 +7,7 @@ mod terminal;
 mod ui_component;
 mod view;
 
-use std::fmt::Display;
+use std::{fmt::Display, time::Duration};
 
 use crossterm::event::{Event, KeyEvent, KeyEventKind, read};
 use editor_cmd::{EditorCommand, EditorCommandInsert};
@@ -19,6 +19,7 @@ use crate::editor::{
     ui_component::UiComponent,
 };
 
+const MESSAGE_DURATION: Duration = Duration::new(5, 0);
 const DEFAULT_MESSAGE: &str = "HELP: Ctrl-S = save | Ctrl-Q = quit";
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -151,9 +152,7 @@ impl Editor {
             }
         } else {
             #[cfg(debug_assertions)]
-            self.message_bar
-                .set_message("Press Event could not be processed\n");
-            // panic!("Press Event could not be processed\n");
+            panic!("Press Event could not be processed\n");
         }
     }
 
@@ -213,6 +212,7 @@ impl Editor {
         }
 
         self.message_bar.render(self.size.height.saturating_sub(1));
+
         if self.size.height > 1 {
             self.status_bar.render(self.size.height.saturating_sub(2));
         }

@@ -52,7 +52,7 @@ impl View {
     pub fn load(&mut self, path: &str) {
         if let Ok(buf) = Buffer::load(path) {
             self.buffer = buf;
-            self.mark_redraw(true);
+            self.set_needs_redraw(true);
         }
     }
 
@@ -80,7 +80,7 @@ impl View {
         #[allow(clippy::arithmetic_side_effects)]
         if new_len - old_len > 0 {
             self.handle_movement(Direction::Right);
-            self.mark_redraw(true);
+            self.set_needs_redraw(true);
         }
     }
 
@@ -93,7 +93,7 @@ impl View {
 
     pub fn handle_deletion(&mut self) {
         self.buffer.delete(self.text_location);
-        self.mark_redraw(true);
+        self.set_needs_redraw(true);
     }
 
     pub fn save(&mut self) {
@@ -104,7 +104,7 @@ impl View {
         self.buffer.insert_newline(self.text_location);
         self.handle_movement(Direction::Down);
         self.handle_movement(Direction::Home);
-        self.mark_redraw(true);
+        self.set_needs_redraw(true);
     }
 
     /// Handles the movement of view.
@@ -294,7 +294,7 @@ impl View {
 }
 
 impl UiComponent for View {
-    fn mark_redraw(&mut self, val: bool) {
+    fn set_needs_redraw(&mut self, val: bool) {
         self.needs_redraw = val;
     }
 
@@ -319,9 +319,7 @@ impl UiComponent for View {
 
         let scroll_top = self.scroll_offset.y;
         for current_row in pos_y..end_y {
-            let line_idx = current_row
-                .saturating_sub(pos_y)
-                .saturating_add(scroll_top);
+            let line_idx = current_row.saturating_sub(pos_y).saturating_add(scroll_top);
             if let Some(line) = self.buffer.lines.get(line_idx) {
                 let left = self.scroll_offset.x;
                 let right = self.scroll_offset.x.saturating_add(width);

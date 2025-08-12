@@ -14,18 +14,17 @@ pub struct Buffer {
 }
 
 impl Buffer {
-    pub fn load(file_path: &str) -> Self {
-        let lines = fs::read_to_string(file_path)
-            .unwrap_or_default()
+    pub fn load(file_path: &str) -> Result<Self, std::io::Error> {
+        let lines: Vec<Line> = fs::read_to_string(file_path)?
             .lines()
             .map(Line::from)
             .collect();
 
-        Self {
+        Ok(Self {
             lines,
             file_info: FileInfo::from(file_path),
             dirty: false,
-        }
+        })
     }
 
     pub fn save(&mut self) -> Result<(), Error> {

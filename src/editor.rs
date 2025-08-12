@@ -1,8 +1,10 @@
 mod document_status;
 mod editor_cmd;
 mod file_info;
+mod message_bar;
 mod status_bar;
 mod terminal;
+mod ui_component;
 mod view;
 
 use std::fmt::Display;
@@ -12,9 +14,12 @@ use editor_cmd::{EditorCommand, EditorCommandInsert};
 use terminal::Terminal;
 use view::View;
 
-use crate::editor::status_bar::StatusBar;
+use crate::editor::{
+    message_bar::MessageBar, status_bar::StatusBar, terminal::TerminalSize,
+    ui_component::UiComponent,
+};
 
-const BARS_COUNT: usize = 2;
+const DEFAULT_MESSAGE: &str = "HELP: Ctrl-S = save | Ctrl-Q = quit";
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub enum EditorMode {
@@ -36,12 +41,15 @@ impl Display for EditorMode {
     }
 }
 
+#[derive(Default)]
 pub struct Editor {
     mode: EditorMode,
     switched_mode: bool,
     should_quit: bool,
     view: View,
     status_bar: StatusBar,
+    message_bar: MessageBar,
+    size: TerminalSize,
 }
 
 impl Editor {
@@ -56,22 +64,42 @@ impl Editor {
         }));
 
         Terminal::initialize()?;
-        let mut view = View::new(BARS_COUNT);
+        let mut editor = Editor::default();
 
         let args: Vec<String> = std::env::args().collect();
         let file_name = args.get(1);
         if let Some(path) = file_name {
-            view.load(path);
+            editor.view.load(path);
             Terminal::set_title(path)?;
         }
 
-        Ok(Self {
-            mode: EditorMode::Normal,
-            should_quit: false,
-            switched_mode: false,
-            view,
-            status_bar: StatusBar::new(BARS_COUNT),
-        })
+        let size = Terminal::size().unwrap_or_default();
+
+        editor.resize(size);
+        editor.message_bar.set_message(DEFAULT_MESSAGE);
+        let status = editor.view.get_status();
+        editor.status_bar.update_status(status);
+
+        Ok(editor)
+    }
+
+    fn resize(&mut self, size: TerminalSize) {
+        self.size = size;
+
+        self.view.resize(TerminalSize {
+            height: size.height.saturating_sub(2),
+            width: size.width,
+        });
+
+        self.message_bar.resize(TerminalSize {
+            height: 1,
+            width: size.width,
+        });
+
+        self.status_bar.resize(TerminalSize {
+            height: 1,
+            width: size.width,
+        });
     }
 
     /// Runs the editor with a infinite loop that reads
@@ -93,6 +121,10 @@ impl Editor {
                     panic!("Unrecognized event, error: {err:?}");
                 }
             }
+
+            let status = self.view.get_status();
+            self.status_bar.update_status(status);
+            self.status_bar.update_editor_mode(self.mode);
         }
     }
 
@@ -119,7 +151,9 @@ impl Editor {
             }
         } else {
             #[cfg(debug_assertions)]
-            panic!("Press Event could not be processed\n");
+            self.message_bar
+                .set_message("Press Event could not be processed\n");
+            // panic!("Press Event could not be processed\n");
         }
     }
 
@@ -152,14 +186,22 @@ impl Editor {
         }
     }
 
-    fn refresh_status_bar(&mut self) {
-        self.status_bar.update_status(self.view.get_status());
-        self.status_bar.update_editor_mode(self.mode);
-        self.status_bar.render();
-    }
+    // fn refresh_status_bar(&mut self) {
+    //     self.status_bar.update_status(self.view.get_status());
+    //     self.status_bar.update_editor_mode(self.mode);
+    //     self.status_bar.render();
+    // }
+    //
+    // fn refresh_message_bar(&mut self) {
+    //     self.message_bar.render();
+    // }
 
     /// Refreshes the screen in order to render correcly the events
     fn refresh_screen(&mut self) {
+        if self.size.width == 0 || self.size.height == 0 {
+            return;
+        }
+
         let _ = Terminal::hide_cursor();
 
         if self.switched_mode {
@@ -170,8 +212,13 @@ impl Editor {
             self.switched_mode = false;
         }
 
-        self.view.render();
-        self.refresh_status_bar();
+        self.message_bar.render(self.size.height.saturating_sub(1));
+        if self.size.height > 1 {
+            self.status_bar.render(self.size.height.saturating_sub(2));
+        }
+        if self.size.height > 2 {
+            self.view.render(0);
+        }
 
         let _ = Terminal::move_cursor_to(self.view.cursor_position());
         let _ = Terminal::show_cursor();

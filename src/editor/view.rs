@@ -2,7 +2,7 @@ use super::{
     editor_cmd::{Direction, EditorCommand},
     terminal::{Position, TerminalSize},
 };
-use crate::editor::{Terminal, document_status::DocumentStatus};
+use crate::editor::{Terminal, document_status::DocumentStatus, ui_component::UiComponent};
 use std::cmp;
 
 mod buffer;
@@ -29,65 +29,16 @@ pub struct Location {
 /// is performed.
 /// The field `scroll_offset` is needed for enabling scrolling by tracking
 /// the offset Position of the origin (0, 0).
+#[derive(Default)]
 pub struct View {
     buffer: Buffer,
     needs_redraw: bool,
     size: TerminalSize,
-    margin_bottom: usize,
-
     text_location: Location,
     scroll_offset: Position,
 }
 
 impl View {
-    pub fn new(margin_bottom: usize) -> Self {
-        let size = Terminal::size().unwrap_or_default();
-        let size = TerminalSize {
-            width: size.width,
-            height: size.height.saturating_sub(margin_bottom),
-        };
-
-        View {
-            size,
-            margin_bottom,
-            needs_redraw: true,
-            buffer: Buffer::default(),
-            text_location: Location::default(),
-            scroll_offset: Position::default(),
-        }
-    }
-
-    /// In renders the content of the file on the screen with the respective offset
-    /// if it is present, otherwise is it gonna simply print
-    /// the name of the editor and the version.
-    pub fn render(&mut self) {
-        if !self.needs_redraw || self.size.height == 0 {
-            return;
-        }
-
-        let TerminalSize { width, height } = self.size;
-        if width == 0 || height == 0 {
-            return;
-        }
-
-        #[allow(clippy::integer_division)]
-        let vertical_center: usize = height / 3;
-
-        let (sx, sy) = (self.scroll_offset.x, self.scroll_offset.y);
-        for i in 0..height {
-            if let Some(line) = self.buffer.lines.get(i.saturating_add(sy)) {
-                Self::render_line(i, &line.get(sx..sx.saturating_add(width)));
-            } else if vertical_center == i && self.buffer.is_empty() {
-                let title = Self::build_title(width);
-                Self::render_line(i, &title);
-            } else {
-                Self::render_line(i, "~");
-            }
-        }
-
-        self.needs_redraw = false;
-    }
-
     /// Calculates the position of the cursor on the visible
     /// screen subtracting the offset from the position.
     /// (See struct Position definition)
@@ -96,26 +47,20 @@ impl View {
             .subtract(&self.scroll_offset)
     }
 
-    /// When we resize the terminal we need to refresh what's
-    /// on the screen.
-    pub fn resize(&mut self, size: TerminalSize) {
-        self.size.width = size.width;
-        self.size.height = size.height.saturating_sub(self.margin_bottom);
-        self.needs_redraw = true;
-    }
-
     /// Loads the buffer with the content of the file we are
     /// rendering.
     pub fn load(&mut self, path: &str) {
-        self.buffer = Buffer::load(path);
-        self.needs_redraw = true;
+        if let Ok(buf) = Buffer::load(path) {
+            self.buffer = buf;
+            self.mark_redraw(true);
+        }
     }
 
     /// Handles the `EditorCommand` sent to view.
     pub fn handle_command(&mut self, cmd: EditorCommand) {
         match cmd {
             EditorCommand::Move(mov) => self.handle_movement(mov),
-            EditorCommand::Resize(size) => self.resize(size),
+            EditorCommand::Resize(_) => {}
             _ => unreachable!(),
         }
     }
@@ -135,7 +80,7 @@ impl View {
         #[allow(clippy::arithmetic_side_effects)]
         if new_len - old_len > 0 {
             self.handle_movement(Direction::Right);
-            self.needs_redraw = true;
+            self.mark_redraw(true);
         }
     }
 
@@ -148,7 +93,7 @@ impl View {
 
     pub fn handle_deletion(&mut self) {
         self.buffer.delete(self.text_location);
-        self.needs_redraw = true;
+        self.mark_redraw(true);
     }
 
     pub fn save(&mut self) {
@@ -159,7 +104,7 @@ impl View {
         self.buffer.insert_newline(self.text_location);
         self.handle_movement(Direction::Down);
         self.handle_movement(Direction::Home);
-        self.needs_redraw = true;
+        self.mark_redraw(true);
     }
 
     /// Handles the movement of view.
@@ -306,9 +251,8 @@ impl View {
 
     /// Renders a single line on a specific row, in debug if something
     /// goes wrong we report it by panicking.
-    fn render_line(row_num: usize, line: &str) {
-        let result = Terminal::print_row(row_num, line);
-        debug_assert!(result.is_ok(), "Failed to render line.");
+    fn render_line(row_num: usize, line: &str) -> Result<(), std::io::Error> {
+        Terminal::print_row(row_num, line)
     }
 
     /// Converts the current Location to the correspective Position
@@ -346,5 +290,49 @@ impl View {
             current_line: self.text_location.line_index,
             modified: self.buffer.is_dirty(),
         }
+    }
+}
+
+impl UiComponent for View {
+    fn mark_redraw(&mut self, val: bool) {
+        self.needs_redraw = val;
+    }
+
+    fn needs_redraw(&self) -> bool {
+        self.needs_redraw
+    }
+
+    fn set_size(&mut self, size: TerminalSize) {
+        self.size = size;
+        self.scroll_location();
+    }
+
+    /// In renders the content of the file on the screen with the respective offset
+    /// if it is present, otherwise is it gonna simply print
+    /// the name of the editor and the version.
+    fn draw(&mut self, pos_y: usize) -> Result<(), std::io::Error> {
+        let TerminalSize { width, height } = self.size;
+        let end_y = pos_y.saturating_add(height);
+
+        #[allow(clippy::integer_division)]
+        let vertical_center: usize = height / 3;
+
+        let scroll_top = self.scroll_offset.y;
+        for current_row in pos_y..end_y {
+            let line_idx = current_row
+                .saturating_sub(pos_y)
+                .saturating_add(scroll_top);
+            if let Some(line) = self.buffer.lines.get(line_idx) {
+                let left = self.scroll_offset.x;
+                let right = self.scroll_offset.x.saturating_add(width);
+                Self::render_line(current_row, &line.get(left..right))?;
+            } else if current_row == vertical_center && self.buffer.is_empty() {
+                Self::render_line(current_row, &Self::build_title(width))?;
+            } else {
+                Self::render_line(current_row, "~")?;
+            }
+        }
+
+        Ok(())
     }
 }

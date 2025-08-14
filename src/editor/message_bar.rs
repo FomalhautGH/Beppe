@@ -19,12 +19,10 @@ impl MessageBar {
     }
 
     pub fn set_message(&mut self, msg: &str) {
-        if msg != self.message {
-            self.message = msg.to_string();
-            self.needs_redraw = true;
-            self.cleared_after_expired = false;
-            self.when = Instant::now();
-        }
+        self.message = msg.to_string();
+        self.needs_redraw = true;
+        self.cleared_after_expired = false;
+        self.when = Instant::now();
     }
 }
 

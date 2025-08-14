@@ -2,14 +2,14 @@ use super::{
     editor_cmd::{Direction, EditorCommand},
     terminal::{Position, TerminalSize},
 };
-use crate::editor::{Terminal, document_status::DocumentStatus, ui_component::UiComponent};
+use crate::editor::{
+    Terminal, document_status::DocumentStatus, line::Line, ui_component::UiComponent,
+};
 use std::cmp;
 
 mod buffer;
 use buffer::Buffer;
-mod line;
-use line::Line;
-mod grapheme;
+mod file_info;
 
 const EDITOR_NAME: &str = env!("CARGO_PKG_NAME");
 const EDITOR_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -49,11 +49,13 @@ impl View {
 
     /// Loads the buffer with the content of the file we are
     /// rendering.
-    pub fn load(&mut self, path: &str) {
-        if let Ok(buf) = Buffer::load(path) {
-            self.buffer = buf;
-            self.set_needs_redraw(true);
-        }
+    pub fn load(&mut self, path: &str) -> Result<(), std::io::Error> {
+        let buf = Buffer::load(path)?;
+
+        self.buffer = buf;
+        self.set_needs_redraw(true);
+
+        Ok(())
     }
 
     /// Handles the `EditorCommand` sent to view.
@@ -96,8 +98,16 @@ impl View {
         self.set_needs_redraw(true);
     }
 
-    pub fn save(&mut self) {
-        let _ = self.buffer.save();
+    pub fn save_as(&mut self, file_name: &str) -> Result<(), std::io::Error> {
+        self.buffer.save_as(file_name)
+    }
+
+    pub fn save(&mut self) -> Result<(), std::io::Error> {
+        self.buffer.save()
+    }
+
+    pub fn is_file_modified(&self) -> bool {
+        self.buffer.is_dirty()
     }
 
     pub fn handle_enter(&mut self) {

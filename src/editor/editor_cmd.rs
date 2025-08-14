@@ -2,15 +2,15 @@ use super::terminal::TerminalSize;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 #[derive(Clone, Copy)]
-pub enum EditorCommandInsert {
-    ExitInsert,
+pub enum TextCommand {
+    Exit,
     Write(char),
     Enter,
     Deletion,
     Backspace,
 }
 
-impl TryFrom<Event> for EditorCommandInsert {
+impl TryFrom<Event> for TextCommand {
     type Error = String;
 
     fn try_from(event: Event) -> Result<Self, Self::Error> {
@@ -19,13 +19,13 @@ impl TryFrom<Event> for EditorCommandInsert {
                 code, modifiers, ..
             }) => match (code, modifiers) {
                 (KeyCode::Esc, _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-                    Ok(EditorCommandInsert::ExitInsert)
+                    Ok(TextCommand::Exit)
                 }
-                (KeyCode::Backspace, _) => Ok(EditorCommandInsert::Backspace),
-                (KeyCode::Delete, _) => Ok(EditorCommandInsert::Deletion),
-                (KeyCode::Char(symbol), _) => Ok(EditorCommandInsert::Write(symbol)),
-                (KeyCode::Tab, _) => Ok(EditorCommandInsert::Write('\t')),
-                (KeyCode::Enter, _) => Ok(EditorCommandInsert::Enter),
+                (KeyCode::Backspace, _) => Ok(TextCommand::Backspace),
+                (KeyCode::Delete, _) => Ok(TextCommand::Deletion),
+                (KeyCode::Char(symbol), _) => Ok(TextCommand::Write(symbol)),
+                (KeyCode::Tab, _) => Ok(TextCommand::Write('\t')),
+                (KeyCode::Enter, _) => Ok(TextCommand::Enter),
                 _ => Err(String::from("todo!")),
             },
 

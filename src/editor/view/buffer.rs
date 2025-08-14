@@ -1,9 +1,9 @@
-use crate::editor::file_info::FileInfo;
+use crate::editor::{line::Line, view::file_info::FileInfo};
 
-use super::{Location, line::Line};
+use super::Location;
 use std::{
     fs::{self, File},
-    io::{Error, Write},
+    io::{Error, ErrorKind, Write},
 };
 
 #[derive(Default)]
@@ -30,15 +30,21 @@ impl Buffer {
     pub fn save(&mut self) -> Result<(), Error> {
         if let Some(file_path) = &self.file_info.path {
             let mut file = File::create(file_path)?;
+
             for line in &self.lines {
                 writeln!(&mut file, "{line}")?;
             }
-        } else {
-            todo!("Can't save without the file_name");
-        }
 
-        self.dirty = false;
-        Ok(())
+            self.dirty = false;
+            Ok(())
+        } else {
+            Err(Error::new(ErrorKind::NotFound, "File name wasn't provided"))
+        }
+    }
+
+    pub fn save_as(&mut self, file_name: &str) -> Result<(), Error> {
+        self.file_info = FileInfo::from(file_name);
+        self.save()
     }
 
     pub fn insert_char(&mut self, character: char, at: Location) {

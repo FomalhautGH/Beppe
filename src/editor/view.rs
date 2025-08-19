@@ -2,9 +2,11 @@ use super::{
     editor_cmd::{Direction, EditorCommand},
     terminal::{Position, TerminalSize},
 };
+
 use crate::editor::{
     Terminal, document_status::DocumentStatus, line::Line, ui_component::UiComponent,
 };
+
 use std::cmp;
 
 mod buffer;
@@ -36,6 +38,7 @@ pub struct View {
     size: TerminalSize,
     text_location: Location,
     scroll_offset: Position,
+    search_term: String,
 }
 
 impl View {
@@ -293,6 +296,33 @@ impl View {
         format!("{:<}{:^width_sub1$}", "~", msg)
     }
 
+    pub fn set_search_term(&mut self, term: String) {
+        self.search_term = term;
+    }
+
+    pub fn move_to_first_occurrence(&mut self) {
+        self.move_to_occurrence(0);
+    }
+
+    pub fn move_to_next_occurrence(&mut self) {
+        self.move_to_occurrence(1);
+    }
+
+    fn move_to_occurrence(&mut self, skip: usize) {
+        if self.search_term.is_empty() {
+            return;
+        }
+
+        if let Some(location) = self
+            .buffer
+            .find_from(&self.search_term, self.text_location, skip)
+        {
+            self.text_location = location;
+            self.scroll_vertically(self.text_location.line_index);
+            self.center_screen();
+        }
+    }
+
     pub fn get_status(&self) -> DocumentStatus {
         DocumentStatus {
             file_name: self.buffer.file_info.to_string(),
@@ -300,6 +330,19 @@ impl View {
             current_line: self.text_location.line_index,
             modified: self.buffer.is_dirty(),
         }
+    }
+
+    fn center_screen(&mut self) {
+        let TerminalSize { height, width } = self.size;
+        let Position { x, y } = self.text_location_to_position();
+
+        let vertical_mid = height.div_ceil(2);
+        let horizontal_mid = width.div_ceil(2);
+
+        self.scroll_offset.y = y.saturating_sub(vertical_mid);
+        self.scroll_offset.x = x.saturating_sub(horizontal_mid);
+
+        self.set_needs_redraw(true);
     }
 }
 

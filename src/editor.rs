@@ -16,7 +16,7 @@ use terminal::Terminal;
 use view::View;
 
 use crate::editor::{
-    command_bar::CommandBar,
+    command_bar::{Cmd, CommandBar},
     message_bar::MessageBar,
     status_bar::StatusBar,
     terminal::{Position, TerminalSize},
@@ -25,7 +25,7 @@ use crate::editor::{
 
 const TIMES_TO_QUIT: u8 = 3;
 const MESSAGE_DURATION: Duration = Duration::new(5, 0);
-const DEFAULT_MESSAGE: &str = "HELP: Ctrl-S = save | Ctrl-Q = quit";
+const DEFAULT_MESSAGE: &str = "HELP: '/' = find | Ctrl-S = save | Ctrl-Q = quit";
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub enum EditorMode {
@@ -181,26 +181,48 @@ impl Editor {
         }
     }
 
+    fn enter_command_mode(&mut self, cmd: Cmd) {
+        self.mode = EditorMode::Command;
+        self.command_bar.set_command(cmd);
+        self.switched_mode = true;
+    }
+
     fn exit_command_mode(&mut self) {
         self.command_bar.clear();
         self.mode = EditorMode::Normal;
         self.switched_mode = true;
     }
 
+    fn execute_command(&mut self) {
+        let cmd = self.command_bar.get_command().expect("Command wasn't set");
+        match cmd {
+            Cmd::Search => {
+                let needle = self.command_bar.get_line();
+                self.view.set_search_term(needle);
+                self.view.move_to_first_occurrence();
+            }
+            Cmd::SaveAs => {
+                let file_name = self.command_bar.get_line();
+                let _ = self.view.save_as(&file_name);
+                self.message_bar.set_message("File was saved successfully");
+            }
+        }
+    }
+
+    fn search_next(&mut self) {
+        self.view.move_to_next_occurrence();
+    }
+
     fn process_command(&mut self, cmd: TextCommand) {
         match cmd {
             TextCommand::Write(symbol) => self.command_bar.handle_insertion(symbol),
-            TextCommand::Enter => {
-                // for now it just saves
-                let file_name = self.command_bar.get_command();
-                let _ = self.view.save_as(&file_name);
-
-                self.message_bar.set_message("File was saved successfully");
-                self.exit_command_mode();
-            }
             TextCommand::Deletion => self.command_bar.handle_deletion(),
             TextCommand::Backspace => self.command_bar.handle_backspace(),
             TextCommand::Exit => self.exit_command_mode(),
+            TextCommand::Enter => {
+                self.execute_command();
+                self.exit_command_mode();
+            }
         }
     }
 
@@ -231,6 +253,8 @@ impl Editor {
 
     fn process_normal_command(&mut self, cmd: EditorCommand) {
         match cmd {
+            EditorCommand::Search => self.enter_command_mode(Cmd::Search),
+            EditorCommand::NextOccurrence => self.search_next(),
             EditorCommand::Save => {
                 let res = self.view.save();
                 match res {
@@ -239,13 +263,12 @@ impl Editor {
                         self.message_bar.set_message("File was saved successfully");
                     }
                     Err(err) if err.kind() == ErrorKind::NotFound => {
-                        self.mode = EditorMode::Command;
-                        self.command_bar.set_prompt("Save As");
-                        self.switched_mode = true;
+                        self.enter_command_mode(Cmd::SaveAs);
                     }
                     Err(_) => self.message_bar.set_message("Error writing file"),
                 }
             }
+
             EditorCommand::Quit => {
                 if self.view.is_file_modified() {
                     self.warn_unsaved_file();
@@ -253,6 +276,7 @@ impl Editor {
                     self.should_quit = true;
                 }
             }
+
             EditorCommand::EnterInsert => {
                 self.mode = EditorMode::Insert;
                 self.switched_mode = true;

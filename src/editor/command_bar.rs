@@ -5,31 +5,46 @@ use crate::editor::{
     ui_component::UiComponent,
 };
 
+#[derive(Clone, Copy)]
+pub enum Cmd {
+    SaveAs,
+    Search,
+}
+
 #[derive(Default)]
 pub struct CommandBar {
     prompt: String,
-    command: Line,
+    line: Line,
+    command: Option<Cmd>,
     cursor_location: usize,
     needs_redraw: bool,
 }
 
 impl CommandBar {
-    pub fn set_prompt(&mut self, msg: &str) {
-        let mut msg = msg.to_string();
-        msg.push_str(": ");
+    pub fn set_command(&mut self, command: Cmd) {
+        self.command = Some(command);
 
-        self.prompt = msg;
+        self.prompt = match command {
+            Cmd::SaveAs => "Save As: ",
+            Cmd::Search => "Search: ",
+        }
+        .to_string();
+
         self.cursor_location = self.prompt.len();
         self.set_needs_redraw(true);
     }
 
-    pub fn get_command(&self) -> String {
-        self.command.to_string()
+    pub fn get_command(&self) -> Option<Cmd> {
+        self.command
+    }
+
+    pub fn get_line(&self) -> String {
+        self.line.to_string()
     }
 
     pub fn clear(&mut self) {
         self.prompt.clear();
-        self.command.clear();
+        self.line.clear();
         self.set_needs_redraw(true);
     }
 
@@ -45,14 +60,14 @@ impl CommandBar {
     }
 
     pub fn handle_deletion(&mut self) {
-        self.command.pop();
+        self.line.pop();
         self.set_needs_redraw(true);
     }
 
     pub fn handle_insertion(&mut self, sy: char) {
-        let old_len = self.command.grapheme_count();
-        self.command.push_chr(sy);
-        let new_len = self.command.grapheme_count();
+        let old_len = self.line.grapheme_count();
+        self.line.push_chr(sy);
+        let new_len = self.line.grapheme_count();
 
         #[allow(clippy::arithmetic_side_effects)]
         if new_len - old_len > 0 {
@@ -92,7 +107,7 @@ impl UiComponent for CommandBar {
     }
 
     fn draw(&mut self, pos_y: usize) -> Result<(), std::io::Error> {
-        Terminal::print_row(pos_y, &format!("{}{}", self.prompt, self.command))?;
+        Terminal::print_row(pos_y, &format!("{}{}", self.prompt, self.line))?;
         Ok(())
     }
 }

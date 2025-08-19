@@ -24,11 +24,12 @@ pub struct TextFragment {
     grapheme: String,
     width: GraphemeWidth,
     replacement: Option<char>,
+    start_index: usize,
 }
 
 impl TextFragment {
     /// Creates a `TextFragment` from a &str.
-    pub fn from(grapheme: &str) -> Self {
+    pub fn from(grapheme: &str, start_index: usize) -> Self {
         let owned_grapheme = String::from(grapheme);
         let (width, replacement) = match owned_grapheme.width() {
             0 => {
@@ -56,6 +57,7 @@ impl TextFragment {
             grapheme: owned_grapheme,
             width,
             replacement,
+            start_index,
         }
     }
 
@@ -77,14 +79,18 @@ impl TextFragment {
 #[derive(Default)]
 pub struct Line {
     line: Vec<TextFragment>,
+    string: String,
 }
 
 impl Line {
     /// Converts the graphemes in the string to a Vector of
     /// `TextFragmets` and creates a Line with it.
     pub fn from(line_str: &str) -> Self {
-        let line: Vec<TextFragment> = line_str.graphemes(true).map(TextFragment::from).collect();
-        Self { line }
+        let line: Vec<TextFragment> = Self::string_to_fragments(line_str);
+        Self {
+            line,
+            string: line_str.to_string(),
+        }
     }
 
     /// It returs the String rapresenting the characters
@@ -120,21 +126,19 @@ impl Line {
         result
     }
 
-    // https://doc.rust-lang.org/std/vec/struct.Vec.html#method.split_off
     pub fn split_off(&mut self, at: usize) -> Self {
-        if at > self.line.len() {
-            Self::default()
+        if let Some(fragment) = self.line.get(at) {
+            let rem = self.string.split_off(fragment.start_index);
+            self.rebuild_fragments();
+            Self::from(&rem)
         } else {
-            let rem = self.line.split_off(at);
-            Self { line: rem }
+            Self::default()
         }
     }
 
     pub fn append(&mut self, other: &Self) {
-        let mut line = self.to_string();
-        let other = other.to_string();
-        line.push_str(&other);
-        *self = Self::from(&line);
+        self.string.push_str(&other.string);
+        self.rebuild_fragments();
     }
 
     /// Calculates the width of the characters until a
@@ -150,34 +154,94 @@ impl Line {
             .sum()
     }
 
-    pub fn insert_char_at(&mut self, index: usize, tf: char) {
-        self.line.insert(index, TextFragment::from(&tf.to_string()));
+    pub fn next_index(&self, index: usize) -> Option<usize> {
+        Some(self.line.get(index.saturating_add(1))?.start_index)
     }
 
-    pub fn remove_at(&mut self, index: usize) -> TextFragment {
-        self.line.remove(index)
+    pub fn insert_char_at(&mut self, index: usize, tf: char) {
+        if let Some(fragment) = self.line.get(index) {
+            self.string.insert(fragment.start_index, tf);
+        } else {
+            self.string.push(tf);
+        }
+        self.rebuild_fragments();
+    }
+
+    pub fn remove_at(&mut self, index: usize) {
+        if let Some(fragment) = self.line.get(index) {
+            let start = fragment.start_index;
+            let end = start.saturating_add(fragment.grapheme.len());
+            self.string.drain(start..end);
+            self.rebuild_fragments();
+        }
     }
 
     pub fn grapheme_count(&self) -> usize {
         self.line.len()
     }
 
-    pub fn push_chr(&mut self, value: char) {
-        self.line.push(TextFragment::from(&value.to_string()));
+    pub fn pop(&mut self) {
+        self.remove_at(self.line.len().saturating_sub(1));
     }
 
-    pub fn pop(&mut self) {
-        self.line.pop();
+    pub fn push_chr(&mut self, ch: char) {
+        self.string.push(ch);
+        self.rebuild_fragments();
     }
 
     pub fn clear(&mut self) {
-        self.line.clear();
+        self.string.clear();
+        self.rebuild_fragments();
+    }
+
+    pub fn find(&self, needle: &str, start_index: usize) -> Option<usize> {
+        let line = self.line.get(..start_index)?;
+        let rem = self.line.get(start_index..)?;
+
+        let offset = Self::fragments_to_string(line).len();
+        let string = Self::fragments_to_string(rem);
+
+        string
+            .find(needle)
+            .map(|byte_index| self.byte_index_to_grapheme_index(byte_index.saturating_add(offset)))
+    }
+
+    fn byte_index_to_grapheme_index(&self, index: usize) -> usize {
+        for (i, fragment) in self.line.iter().enumerate() {
+            if index <= fragment.start_index {
+                return i;
+            }
+        }
+
+        if cfg!(debug_assertions) {
+            panic!("Invalid byte_idx passed to byte_idx_to_grapheme_idx: {index:?}")
+        } else {
+            0
+        }
+    }
+
+    fn rebuild_fragments(&mut self) {
+        self.line = Self::string_to_fragments(&self.string);
+    }
+
+    fn fragments_to_string(fragments: &[TextFragment]) -> String {
+        let mut result = String::new();
+        for i in fragments {
+            result.push_str(&i.grapheme);
+        }
+        result
+    }
+
+    fn string_to_fragments(string: &str) -> Vec<TextFragment> {
+        string
+            .grapheme_indices(true)
+            .map(|(i, fragment)| TextFragment::from(fragment, i))
+            .collect()
     }
 }
 
 impl Display for Line {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let result: String = self.line.iter().map(TextFragment::grapheme).collect();
-        write!(f, "{result}")
+        write!(f, "{}", self.string)
     }
 }

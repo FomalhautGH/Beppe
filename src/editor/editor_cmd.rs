@@ -57,6 +57,8 @@ pub enum EditorCommand {
     Move(Direction),
     Resize(TerminalSize),
     EnterInsert,
+    NextOccurrence,
+    Search,
     Save,
     Quit,
 }
@@ -74,6 +76,7 @@ impl TryFrom<Event> for EditorCommand {
                 (KeyCode::Char('s'), KeyModifiers::CONTROL) => Ok(Self::Save),
                 (KeyCode::Char('q'), KeyModifiers::CONTROL) => Ok(Self::Quit),
                 (KeyCode::Char('i'), _) => Ok(Self::EnterInsert),
+                (KeyCode::Char('n'), _) => Ok(Self::NextOccurrence),
 
                 (KeyCode::Up | KeyCode::Char('k'), _) => Ok(Self::Move(Direction::Up)),
                 (KeyCode::Right | KeyCode::Char('l'), _) => Ok(Self::Move(Direction::Right)),
@@ -82,6 +85,7 @@ impl TryFrom<Event> for EditorCommand {
 
                 (KeyCode::Home | KeyCode::Char('0'), _) => Ok(Self::Move(Direction::Home)),
                 (KeyCode::End | KeyCode::Char('$'), _) => Ok(Self::Move(Direction::End)),
+                (KeyCode::Char('/'), _) => Ok(Self::Search),
 
                 (KeyCode::PageUp, _) | (KeyCode::Char('b'), KeyModifiers::CONTROL) => {
                     Ok(Self::Move(Direction::PageUp))

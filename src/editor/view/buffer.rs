@@ -81,60 +81,103 @@ impl Buffer {
         }
     }
 
-    pub fn find_from(
+    pub fn rfind_from_location(
         &self,
         needle: &str,
-        mut start_location: Location,
-        mut times: usize,
+        start_location: Location,
+        mut nth: usize,
     ) -> Option<Location> {
-        let mut iter = self
+        let to_head = self.lines.get(..=start_location.line_index)?;
+        for (y, line) in to_head.iter().enumerate().rev() {
+            let line_end = if y == start_location.line_index {
+                start_location.grapheme_index
+            } else {
+                line.grapheme_count()
+            };
+
+            let matches = line.rmatch_indices(needle);
+            for (index, _) in matches {
+                if index > line_end {
+                    continue;
+                }
+
+                if nth.checked_sub(1).is_none() {
+                    return Some(Location {
+                        grapheme_index: index,
+                        line_index: y,
+                    });
+                }
+
+                nth = nth.saturating_sub(1);
+            }
+        }
+
+        for (y, line) in self.lines.iter().enumerate().rev() {
+            let matches = line.rmatch_indices(needle);
+
+            for (index, _) in matches {
+                if nth.checked_sub(1).is_none() {
+                    return Some(Location {
+                        grapheme_index: index,
+                        line_index: y,
+                    });
+                }
+
+                nth = nth.saturating_sub(1);
+            }
+        }
+
+        None
+    }
+
+    pub fn find_from_location(
+        &self,
+        needle: &str,
+        start_location: Location,
+        mut nth: usize,
+    ) -> Option<Location> {
+        let to_bottom = self
             .lines
             .iter()
             .skip(start_location.line_index)
-            .enumerate()
-            .peekable();
+            .enumerate();
 
-        while let Some(&(mut y, line)) = iter.peek() {
+        for (y, line) in to_bottom {
             let line_start = if y == 0 {
                 start_location.grapheme_index
             } else {
                 0
             };
 
-            if let Some(x) = line.find(needle, line_start) {
-                if times.checked_sub(1).is_none() {
-                    y = y.saturating_add(start_location.line_index);
+            let matches = line.match_indices(needle);
+            for (index, _) in matches {
+                if index < line_start {
+                    continue;
+                }
+
+                if nth.checked_sub(1).is_none() {
                     return Some(Location {
-                        grapheme_index: x,
-                        line_index: y,
+                        grapheme_index: index,
+                        line_index: y.saturating_add(start_location.line_index),
                     });
                 }
 
-                start_location.grapheme_index =
-                    line.next_index(start_location.grapheme_index).unwrap();
-                times = times.saturating_sub(1);
-            } else {
-                iter.next();
+                nth = nth.saturating_sub(1);
             }
         }
 
-        let head = self.lines.get(..start_location.line_index)?;
-        let mut iter = head.iter().enumerate().peekable();
+        for (y, line) in self.lines.iter().enumerate() {
+            let matches = line.match_indices(needle);
 
-        while let Some(&(y, line)) = iter.peek() {
-            if let Some(x) = line.find(needle, 0) {
-                if times.checked_sub(1).is_none() {
+            for (index, _) in matches {
+                if nth.checked_sub(1).is_none() {
                     return Some(Location {
-                        grapheme_index: x,
+                        grapheme_index: index,
                         line_index: y,
                     });
                 }
 
-                start_location.grapheme_index =
-                    line.next_index(start_location.grapheme_index).unwrap();
-                times = times.saturating_sub(1);
-            } else {
-                iter.next();
+                nth = nth.saturating_sub(1);
             }
         }
 

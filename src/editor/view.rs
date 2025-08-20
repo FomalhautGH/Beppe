@@ -308,14 +308,33 @@ impl View {
         self.move_to_occurrence(1);
     }
 
-    fn move_to_occurrence(&mut self, skip: usize) {
+    pub fn move_to_prev_occurrence(&mut self) {
+        self.rmove_to_occurrence(1);
+    }
+
+    fn rmove_to_occurrence(&mut self, nth: usize) {
         if self.search_term.is_empty() {
             return;
         }
 
-        if let Some(location) = self
-            .buffer
-            .find_from(&self.search_term, self.text_location, skip)
+        if let Some(location) =
+            self.buffer
+                .rfind_from_location(&self.search_term, self.text_location, nth)
+        {
+            self.text_location = location;
+            self.scroll_vertically(self.text_location.line_index);
+            self.center_screen();
+        }
+    }
+
+    fn move_to_occurrence(&mut self, nth: usize) {
+        if self.search_term.is_empty() {
+            return;
+        }
+
+        if let Some(location) =
+            self.buffer
+                .find_from_location(&self.search_term, self.text_location, nth)
         {
             self.text_location = location;
             self.scroll_vertically(self.text_location.line_index);

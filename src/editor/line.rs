@@ -154,10 +154,6 @@ impl Line {
             .sum()
     }
 
-    pub fn next_index(&self, index: usize) -> Option<usize> {
-        Some(self.line.get(index.saturating_add(1))?.start_index)
-    }
-
     pub fn insert_char_at(&mut self, index: usize, tf: char) {
         if let Some(fragment) = self.line.get(index) {
             self.string.insert(fragment.start_index, tf);
@@ -194,16 +190,18 @@ impl Line {
         self.rebuild_fragments();
     }
 
-    pub fn find(&self, needle: &str, start_index: usize) -> Option<usize> {
-        let line = self.line.get(..start_index)?;
-        let rem = self.line.get(start_index..)?;
+    pub fn match_indices(&self, needle: &str) -> Vec<(usize, &str)> {
+        self.string
+            .match_indices(needle)
+            .map(|(byte_index, inst)| (self.byte_index_to_grapheme_index(byte_index), inst))
+            .collect()
+    }
 
-        let offset = Self::fragments_to_string(line).len();
-        let string = Self::fragments_to_string(rem);
-
-        string
-            .find(needle)
-            .map(|byte_index| self.byte_index_to_grapheme_index(byte_index.saturating_add(offset)))
+    pub fn rmatch_indices(&self, needle: &str) -> Vec<(usize, &str)> {
+        self.string
+            .rmatch_indices(needle)
+            .map(|(byte_index, inst)| (self.byte_index_to_grapheme_index(byte_index), inst))
+            .collect()
     }
 
     fn byte_index_to_grapheme_index(&self, index: usize) -> usize {
@@ -222,14 +220,6 @@ impl Line {
 
     fn rebuild_fragments(&mut self) {
         self.line = Self::string_to_fragments(&self.string);
-    }
-
-    fn fragments_to_string(fragments: &[TextFragment]) -> String {
-        let mut result = String::new();
-        for i in fragments {
-            result.push_str(&i.grapheme);
-        }
-        result
     }
 
     fn string_to_fragments(string: &str) -> Vec<TextFragment> {

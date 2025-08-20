@@ -137,9 +137,9 @@ impl Editor {
             let event = read();
             match event {
                 Ok(event) => self.evaluate_event(event),
-                Err(err) => {
+                Err(_err) => {
                     #[cfg(debug_assertions)]
-                    panic!("Unrecognized event, error: {err:?}");
+                    panic!("Unrecognized event, error: {_err:?}");
                 }
             }
 
@@ -213,6 +213,10 @@ impl Editor {
         self.view.move_to_next_occurrence();
     }
 
+    fn search_prev(&mut self) {
+        self.view.move_to_prev_occurrence();
+    }
+
     fn process_command(&mut self, cmd: TextCommand) {
         match cmd {
             TextCommand::Write(symbol) => self.command_bar.handle_insertion(symbol),
@@ -255,6 +259,7 @@ impl Editor {
         match cmd {
             EditorCommand::Search => self.enter_command_mode(Cmd::Search),
             EditorCommand::NextOccurrence => self.search_next(),
+            EditorCommand::PrevOccurrence => self.search_prev(),
             EditorCommand::Save => {
                 let res = self.view.save();
                 match res {

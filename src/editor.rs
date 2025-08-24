@@ -199,7 +199,7 @@ impl Editor {
             Cmd::Search => {
                 let needle = self.command_bar.get_line();
                 self.view.set_search_term(needle);
-                self.view.move_to_first_occurrence();
+                self.view.search();
             }
             Cmd::SaveAs => {
                 let file_name = self.command_bar.get_line();
@@ -207,14 +207,6 @@ impl Editor {
                 self.message_bar.set_message("File was saved successfully");
             }
         }
-    }
-
-    fn search_next(&mut self) {
-        self.view.move_to_next_occurrence();
-    }
-
-    fn search_prev(&mut self) {
-        self.view.move_to_prev_occurrence();
     }
 
     fn process_command(&mut self, cmd: TextCommand) {
@@ -258,8 +250,8 @@ impl Editor {
     fn process_normal_command(&mut self, cmd: EditorCommand) {
         match cmd {
             EditorCommand::Search => self.enter_command_mode(Cmd::Search),
-            EditorCommand::NextOccurrence => self.search_next(),
-            EditorCommand::PrevOccurrence => self.search_prev(),
+            EditorCommand::NextOccurrence => self.view.search_next(),
+            EditorCommand::PrevOccurrence => self.view.search_prev(),
             EditorCommand::Save => {
                 let res = self.view.save();
                 match res {

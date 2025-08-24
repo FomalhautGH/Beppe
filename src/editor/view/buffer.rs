@@ -81,103 +81,64 @@ impl Buffer {
         }
     }
 
-    pub fn rfind_from_location(
-        &self,
-        needle: &str,
-        start_location: Location,
-        mut nth: usize,
-    ) -> Option<Location> {
-        let to_head = self.lines.get(..=start_location.line_index)?;
-        for (y, line) in to_head.iter().enumerate().rev() {
-            let line_end = if y == start_location.line_index {
+    pub fn search_forward(&self, needle: &str, start_location: Location) -> Option<Location> {
+        let mut is_first = true;
+
+        for (i, line) in self
+            .lines
+            .iter()
+            .enumerate()
+            .cycle()
+            .skip(start_location.line_index)
+            .take(self.lines.len().saturating_add(1))
+        {
+            let start = if is_first {
+                is_first = false;
                 start_location.grapheme_index
             } else {
-                line.grapheme_count()
+                0
             };
 
-            let matches = line.rmatch_indices(needle);
-            for (index, _) in matches {
-                if index > line_end {
-                    continue;
-                }
-
-                if nth.checked_sub(1).is_none() {
-                    return Some(Location {
-                        grapheme_index: index,
-                        line_index: y,
-                    });
-                }
-
-                nth = nth.saturating_sub(1);
-            }
-        }
-
-        for (y, line) in self.lines.iter().enumerate().rev() {
-            let matches = line.rmatch_indices(needle);
-
-            for (index, _) in matches {
-                if nth.checked_sub(1).is_none() {
-                    return Some(Location {
-                        grapheme_index: index,
-                        line_index: y,
-                    });
-                }
-
-                nth = nth.saturating_sub(1);
+            if let Some(index) = line.search_forward(needle, start) {
+                return Some(Location {
+                    grapheme_index: index,
+                    line_index: i,
+                });
             }
         }
 
         None
     }
 
-    pub fn find_from_location(
-        &self,
-        needle: &str,
-        start_location: Location,
-        mut nth: usize,
-    ) -> Option<Location> {
-        let to_bottom = self
+    pub fn search_backwards(&self, needle: &str, start_location: Location) -> Option<Location> {
+        let mut is_first = true;
+
+        for (i, line) in self
             .lines
             .iter()
-            .skip(start_location.line_index)
-            .enumerate();
-
-        for (y, line) in to_bottom {
-            let line_start = if y == 0 {
+            .enumerate()
+            .rev()
+            .cycle()
+            .skip(
+                self.lines
+                    .len()
+                    .saturating_sub(start_location.line_index)
+                    .saturating_sub(1),
+            )
+            .take(self.lines.len().saturating_add(1))
+        {
+            let end = if is_first {
+                is_first = false;
                 start_location.grapheme_index
             } else {
-                0
+                line.grapheme_count()
             };
 
-            let matches = line.match_indices(needle);
-            for (index, _) in matches {
-                if index < line_start {
-                    continue;
-                }
-
-                if nth.checked_sub(1).is_none() {
-                    return Some(Location {
-                        grapheme_index: index,
-                        line_index: y.saturating_add(start_location.line_index),
-                    });
-                }
-
-                nth = nth.saturating_sub(1);
-            }
-        }
-
-        for (y, line) in self.lines.iter().enumerate() {
-            let matches = line.match_indices(needle);
-
-            for (index, _) in matches {
-                if nth.checked_sub(1).is_none() {
-                    return Some(Location {
-                        grapheme_index: index,
-                        line_index: y,
-                    });
-                }
-
-                nth = nth.saturating_sub(1);
+            if let Some(index) = line.search_backwards(needle, end) {
+                return Some(Location {
+                    grapheme_index: index,
+                    line_index: i,
+                });
             }
         }
 

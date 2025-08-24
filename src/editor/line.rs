@@ -2,6 +2,9 @@ use std::{fmt::Display, ops::Range};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+type GraphemeIndex = usize;
+type ByteIndex = usize;
+
 #[derive(Clone, Copy)]
 pub enum GraphemeWidth {
     Zero,
@@ -24,12 +27,12 @@ pub struct TextFragment {
     grapheme: String,
     width: GraphemeWidth,
     replacement: Option<char>,
-    start_index: usize,
+    start_index: ByteIndex,
 }
 
 impl TextFragment {
     /// Creates a `TextFragment` from a &str.
-    pub fn from(grapheme: &str, start_index: usize) -> Self {
+    pub fn from(grapheme: &str, start_index: ByteIndex) -> Self {
         let owned_grapheme = String::from(grapheme);
         let (width, replacement) = match owned_grapheme.width() {
             0 => {
@@ -95,7 +98,7 @@ impl Line {
 
     /// It returs the String rapresenting the characters
     /// visible in the supplied range.
-    pub fn get(&self, range: Range<usize>) -> String {
+    pub fn get(&self, range: Range<GraphemeIndex>) -> String {
         if range.start >= range.end {
             return String::new();
         }
@@ -126,7 +129,7 @@ impl Line {
         result
     }
 
-    pub fn split_off(&mut self, at: usize) -> Self {
+    pub fn split_off(&mut self, at: GraphemeIndex) -> Self {
         if let Some(fragment) = self.line.get(at) {
             let rem = self.string.split_off(fragment.start_index);
             self.rebuild_fragments();
@@ -143,7 +146,7 @@ impl Line {
 
     /// Calculates the width of the characters until a
     /// specific index.
-    pub fn width_until(&self, index: usize) -> usize {
+    pub fn width_until(&self, index: GraphemeIndex) -> GraphemeIndex {
         self.line
             .iter()
             .take(index)
@@ -154,7 +157,7 @@ impl Line {
             .sum()
     }
 
-    pub fn insert_char_at(&mut self, index: usize, tf: char) {
+    pub fn insert_char_at(&mut self, index: GraphemeIndex, tf: char) {
         if let Some(fragment) = self.line.get(index) {
             self.string.insert(fragment.start_index, tf);
         } else {
@@ -163,7 +166,7 @@ impl Line {
         self.rebuild_fragments();
     }
 
-    pub fn remove_at(&mut self, index: usize) {
+    pub fn remove_at(&mut self, index: GraphemeIndex) {
         if let Some(fragment) = self.line.get(index) {
             let start = fragment.start_index;
             let end = start.saturating_add(fragment.grapheme.len());
@@ -172,7 +175,7 @@ impl Line {
         }
     }
 
-    pub fn grapheme_count(&self) -> usize {
+    pub fn grapheme_count(&self) -> GraphemeIndex {
         self.line.len()
     }
 
@@ -190,32 +193,64 @@ impl Line {
         self.rebuild_fragments();
     }
 
-    pub fn match_indices(&self, needle: &str) -> Vec<(usize, &str)> {
-        self.string
-            .match_indices(needle)
-            .map(|(byte_index, inst)| (self.byte_index_to_grapheme_index(byte_index), inst))
-            .collect()
+    pub fn search_backwards(&self, needle: &str, mut to: GraphemeIndex) -> Option<GraphemeIndex> {
+        if self.line.is_empty() {
+            return None;
+        }
+
+        to = to.saturating_sub(1);
+        let (to_byte, grapheme_len) = self.grapheme_index_to_byte_index(to);
+        to = to_byte.saturating_add(grapheme_len);
+
+        self.find_all(needle, 0..to)
+            .last()
+            .map(|(_, grapheme_index)| *grapheme_index)
     }
 
-    pub fn rmatch_indices(&self, needle: &str) -> Vec<(usize, &str)> {
-        self.string
-            .rmatch_indices(needle)
-            .map(|(byte_index, inst)| (self.byte_index_to_grapheme_index(byte_index), inst))
-            .collect()
+    pub fn search_forward(&self, needle: &str, from: GraphemeIndex) -> Option<GraphemeIndex> {
+        if self.line.is_empty() {
+            return None;
+        }
+
+        let (start, _) = self.grapheme_index_to_byte_index(from);
+        let end = self.string.len();
+
+        self.find_all(needle, start..end)
+            .first()
+            .map(|(_, grapheme_index)| *grapheme_index)
     }
 
-    fn byte_index_to_grapheme_index(&self, index: usize) -> usize {
+    fn find_all(&self, needle: &str, range: Range<ByteIndex>) -> Vec<(ByteIndex, GraphemeIndex)> {
+        let start = range.start;
+
+        self.string.get(range).map_or_else(Vec::new, |haystack| {
+            haystack
+                .match_indices(needle)
+                .map(|(relative_byte_index, _)| {
+                    let absolute_byte_index = relative_byte_index.saturating_add(start);
+                    (
+                        absolute_byte_index,
+                        self.byte_index_to_grapheme_index(absolute_byte_index),
+                    )
+                })
+                .collect()
+        })
+    }
+
+    fn byte_index_to_grapheme_index(&self, index: ByteIndex) -> GraphemeIndex {
         for (i, fragment) in self.line.iter().enumerate() {
             if index <= fragment.start_index {
                 return i;
             }
         }
+        panic!("Invalid byte index");
+    }
 
-        if cfg!(debug_assertions) {
-            panic!("Invalid byte_idx passed to byte_idx_to_grapheme_idx: {index:?}")
-        } else {
-            0
-        }
+    fn grapheme_index_to_byte_index(&self, index: GraphemeIndex) -> (ByteIndex, usize) {
+        debug_assert!(index < self.grapheme_count());
+        self.line.get(index).map_or((0, 0), |fragment| {
+            (fragment.start_index, fragment.grapheme.len())
+        })
     }
 
     fn rebuild_fragments(&mut self) {

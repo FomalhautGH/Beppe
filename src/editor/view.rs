@@ -300,26 +300,14 @@ impl View {
         self.search_term = term;
     }
 
-    pub fn move_to_first_occurrence(&mut self) {
-        self.move_to_occurrence(0);
-    }
-
-    pub fn move_to_next_occurrence(&mut self) {
-        self.move_to_occurrence(1);
-    }
-
-    pub fn move_to_prev_occurrence(&mut self) {
-        self.rmove_to_occurrence(1);
-    }
-
-    fn rmove_to_occurrence(&mut self, nth: usize) {
+    pub fn search(&mut self) {
         if self.search_term.is_empty() {
             return;
         }
 
-        if let Some(location) =
-            self.buffer
-                .rfind_from_location(&self.search_term, self.text_location, nth)
+        if let Some(location) = self
+            .buffer
+            .search_forward(&self.search_term, self.text_location)
         {
             self.text_location = location;
             self.scroll_vertically(self.text_location.line_index);
@@ -327,18 +315,39 @@ impl View {
         }
     }
 
-    fn move_to_occurrence(&mut self, nth: usize) {
+    pub fn search_next(&mut self) {
         if self.search_term.is_empty() {
             return;
         }
+        self.move_right();
 
-        if let Some(location) =
-            self.buffer
-                .find_from_location(&self.search_term, self.text_location, nth)
+        if let Some(location) = self
+            .buffer
+            .search_forward(&self.search_term, self.text_location)
         {
             self.text_location = location;
             self.scroll_vertically(self.text_location.line_index);
             self.center_screen();
+        } else {
+            self.move_left();
+        }
+    }
+
+    pub fn search_prev(&mut self) {
+        if self.search_term.is_empty() {
+            return;
+        }
+        self.move_left();
+
+        if let Some(location) = self
+            .buffer
+            .search_backwards(&self.search_term, self.text_location)
+        {
+            self.text_location = location;
+            self.scroll_vertically(self.text_location.line_index);
+            self.center_screen();
+        } else {
+            self.move_right();
         }
     }
 

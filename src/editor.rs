@@ -1,3 +1,4 @@
+mod annotated_line;
 mod command_bar;
 mod document_status;
 mod editor_cmd;

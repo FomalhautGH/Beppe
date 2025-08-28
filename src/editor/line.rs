@@ -2,8 +2,10 @@ use std::{fmt::Display, ops::Range};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-type GraphemeIndex = usize;
-type ByteIndex = usize;
+use crate::editor::annotated_line::{AnnotatedLine, AnnotationType};
+
+pub type GraphemeIndex = usize;
+pub type ByteIndex = usize;
 
 #[derive(Clone, Copy)]
 pub enum GraphemeWidth {
@@ -17,6 +19,15 @@ impl GraphemeWidth {
         match self {
             Self::Zero | Self::Half => other.saturating_add(1),
             Self::Full => other.saturating_add(2),
+        }
+    }
+}
+
+impl From<GraphemeWidth> for usize {
+    fn from(value: GraphemeWidth) -> Self {
+        match value {
+            GraphemeWidth::Zero | GraphemeWidth::Half => 1,
+            GraphemeWidth::Full => 2,
         }
     }
 }
@@ -64,10 +75,6 @@ impl TextFragment {
         }
     }
 
-    pub fn grapheme(&self) -> &str {
-        &self.grapheme
-    }
-
     pub fn width(&self) -> GraphemeWidth {
         self.width
     }
@@ -98,32 +105,51 @@ impl Line {
 
     /// It returs the String rapresenting the characters
     /// visible in the supplied range.
-    pub fn get(&self, range: Range<GraphemeIndex>) -> String {
-        if range.start >= range.end {
-            return String::new();
+    pub fn get(&self, range: Range<GraphemeIndex>, query: Option<&str>) -> AnnotatedLine {
+        #[rustfmt::skip]
+        if range.is_empty() { return AnnotatedLine::default(); };
+
+        let mut result = AnnotatedLine::from(&self.string);
+        if let Some(needle) = query {
+            let end = self.string.len();
+            let matches = self.find_all(needle, 0..end);
+
+            for mat in matches {
+                let from = mat.0;
+                let len = needle.len();
+                let to = from.saturating_add(len);
+                result.push_annotation(from..to, AnnotationType::Match);
+            }
         }
 
-        let mut result = String::new();
-        let mut current_pos = 0;
+        let end = self.string.len();
+        for fragment in self.line.iter().rev() {
+            let fragment_start = fragment.start_index;
+            let fragment_end = fragment_start.saturating_add(fragment.grapheme.len());
 
-        for fragment in &self.line {
-            if current_pos >= range.end {
+            // TODO: maybe replace the last part of the string with an empty string
+            #[rustfmt::skip]
+            if fragment_start >= range.end { continue; };
+
+            if fragment_end >= range.end {
+                result.replace(fragment_start..end, "⋯");
+                continue;
+            }
+
+            if fragment_end <= range.start {
+                result.replace(0..fragment_end, "");
                 break;
             }
 
-            let fragment_end = fragment.width().saturating_add(current_pos);
-
-            if fragment_end > range.start {
-                if fragment_end > range.end || current_pos < range.start {
-                    result.push('⋯');
-                } else if let Some(replacement) = fragment.replacement() {
-                    result.push(replacement);
-                } else {
-                    result.push_str(fragment.grapheme());
-                }
+            if fragment_start < range.start {
+                result.replace(0..fragment_end, "⋯");
+                break;
             }
 
-            current_pos = fragment_end;
+            if let Some(replacement) = fragment.replacement() {
+                let replacement = &replacement.to_string();
+                result.replace(fragment_start..fragment_end, replacement);
+            }
         }
 
         result
@@ -247,7 +273,7 @@ impl Line {
     }
 
     fn grapheme_index_to_byte_index(&self, index: GraphemeIndex) -> (ByteIndex, usize) {
-        debug_assert!(index < self.grapheme_count());
+        debug_assert!(index <= self.grapheme_count());
         self.line.get(index).map_or((0, 0), |fragment| {
             (fragment.start_index, fragment.grapheme.len())
         })

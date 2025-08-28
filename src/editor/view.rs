@@ -4,7 +4,8 @@ use super::{
 };
 
 use crate::editor::{
-    Terminal, document_status::DocumentStatus, line::Line, ui_component::UiComponent,
+    Terminal, annotated_line::AnnotatedLine, document_status::DocumentStatus, line::Line,
+    ui_component::UiComponent,
 };
 
 use std::cmp;
@@ -268,6 +269,10 @@ impl View {
         Terminal::print_row(row_num, line)
     }
 
+    fn render_annotated_line(row_num: usize, line: AnnotatedLine) -> Result<(), std::io::Error> {
+        Terminal::print_annotated_row(row_num, line)
+    }
+
     /// Converts the current Location to the correspective Position
     /// on the infinite grid.
     fn text_location_to_position(&self) -> Position {
@@ -404,7 +409,17 @@ impl UiComponent for View {
             if let Some(line) = self.buffer.lines.get(line_idx) {
                 let left = self.scroll_offset.x;
                 let right = self.scroll_offset.x.saturating_add(width);
-                Self::render_line(current_row, &line.get(left..right))?;
+                Self::render_annotated_line(
+                    current_row,
+                    line.get(
+                        left..right,
+                        if !self.search_term.is_empty() {
+                            Some(&self.search_term)
+                        } else {
+                            None
+                        },
+                    ),
+                )?;
             } else if current_row == vertical_center && self.buffer.is_empty() {
                 Self::render_line(current_row, &Self::build_title(width))?;
             } else {

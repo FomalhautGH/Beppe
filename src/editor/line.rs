@@ -105,9 +105,15 @@ impl Line {
 
     /// It returs the String rapresenting the characters
     /// visible in the supplied range.
-    pub fn get(&self, range: Range<GraphemeIndex>, query: Option<&str>) -> AnnotatedLine {
-        #[rustfmt::skip]
-        if range.is_empty() { return AnnotatedLine::default(); };
+    pub fn get(
+        &self,
+        range: Range<GraphemeIndex>,
+        query: Option<&str>,
+        selected_match: Option<GraphemeIndex>,
+    ) -> AnnotatedLine {
+        if range.is_empty() {
+            return AnnotatedLine::default();
+        }
 
         let mut result = AnnotatedLine::from(&self.string);
         if let Some(needle) = query {
@@ -115,10 +121,23 @@ impl Line {
             let matches = self.find_all(needle, 0..end);
 
             for mat in matches {
-                let from = mat.0;
-                let len = needle.len();
-                let to = from.saturating_add(len);
-                result.push_annotation(from..to, AnnotationType::Match);
+                let from: ByteIndex = mat.0;
+                let from_gr: GraphemeIndex = mat.1;
+
+                let len: ByteIndex = needle.len();
+                let to: ByteIndex = from.saturating_add(len);
+
+                // TODO: there mught be graphemes in the search term
+                let to_gr: GraphemeIndex = from_gr.saturating_add(len);
+
+                if let Some(on) = selected_match
+                    && on >= from_gr
+                    && on < to_gr
+                {
+                    result.push_annotation(from..to, AnnotationType::SelectedMatch);
+                } else {
+                    result.push_annotation(from..to, AnnotationType::Match);
+                }
             }
         }
 
@@ -128,8 +147,9 @@ impl Line {
             let fragment_end = fragment_start.saturating_add(fragment.grapheme.len());
 
             // TODO: maybe replace the last part of the string with an empty string
-            #[rustfmt::skip]
-            if fragment_start >= range.end { continue; };
+            if fragment_start >= range.end {
+                continue;
+            }
 
             if fragment_end >= range.end {
                 result.replace(fragment_start..end, "⋯");

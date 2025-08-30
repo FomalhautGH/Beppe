@@ -1,4 +1,5 @@
 mod annotated_line;
+mod annotated_line_iterator;
 mod command_bar;
 mod document_status;
 mod editor_cmd;
@@ -248,8 +249,13 @@ impl Editor {
         }
     }
 
+    fn clear_search(&mut self) {
+        self.view.clear_search_term();
+    }
+
     fn process_normal_command(&mut self, cmd: EditorCommand) {
         match cmd {
+            EditorCommand::ExitSearch => self.clear_search(),
             EditorCommand::Search => self.enter_command_mode(Cmd::Search),
             EditorCommand::NextOccurrence => self.view.search_next(),
             EditorCommand::PrevOccurrence => self.view.search_prev(),

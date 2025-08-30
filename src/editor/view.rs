@@ -269,7 +269,7 @@ impl View {
         Terminal::print_row(row_num, line)
     }
 
-    fn render_annotated_line(row_num: usize, line: AnnotatedLine) -> Result<(), std::io::Error> {
+    fn render_annotated_line(row_num: usize, line: &AnnotatedLine) -> Result<(), std::io::Error> {
         Terminal::print_annotated_row(row_num, line)
     }
 
@@ -299,6 +299,13 @@ impl View {
         }
 
         format!("{:<}{:^width_sub1$}", "~", msg)
+    }
+
+    pub fn clear_search_term(&mut self) {
+        if !self.search_term.is_empty() {
+            self.search_term.clear();
+            self.needs_redraw = true;
+        }
     }
 
     pub fn set_search_term(&mut self, term: String) {
@@ -409,17 +416,20 @@ impl UiComponent for View {
             if let Some(line) = self.buffer.lines.get(line_idx) {
                 let left = self.scroll_offset.x;
                 let right = self.scroll_offset.x.saturating_add(width);
-                Self::render_annotated_line(
-                    current_row,
-                    line.get(
-                        left..right,
-                        if !self.search_term.is_empty() {
-                            Some(&self.search_term)
-                        } else {
-                            None
-                        },
-                    ),
-                )?;
+
+                let query = if self.search_term.is_empty() {
+                    None
+                } else {
+                    Some(self.search_term.as_str())
+                };
+
+                let on_line = if self.text_location.line_index == current_row {
+                    Some(self.text_location.grapheme_index)
+                } else {
+                    None
+                };
+
+                Self::render_annotated_line(current_row, &line.get(left..right, query, on_line))?;
             } else if current_row == vertical_center && self.buffer.is_empty() {
                 Self::render_line(current_row, &Self::build_title(width))?;
             } else {

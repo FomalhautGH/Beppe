@@ -128,22 +128,27 @@ impl Terminal {
     }
 
     /// Prints a string on a specific row.
-    pub fn print_annotated_row(row: usize, text: AnnotatedLine) -> Result<(), Error> {
+    pub fn print_annotated_row(row: usize, text: &AnnotatedLine) -> Result<(), Error> {
         Self::move_cursor_to(Position { x: 0, y: row })?;
         Self::clear_line()?;
 
-        for i in &text {
+        for i in text {
             match i.ty {
+                AnnotationType::None => {}
                 AnnotationType::Match => {
                     Self::set_foreground(Color::Black)?;
                     Self::set_background(Color::Cyan)?;
                 }
-                AnnotationType::SelectedMatch => todo!(),
-                AnnotationType::None => {}
+                AnnotationType::SelectedMatch => {
+                    Self::set_foreground(Color::Black)?;
+                    Self::set_background(Color::Magenta)?;
+                }
             }
 
-            Self::print(&i.str)?;
-            Self::reset_colors()?;
+            Self::print(i.str)?;
+            if i.ty != AnnotationType::None {
+                Self::reset_colors()?;
+            }
         }
 
         Ok(())

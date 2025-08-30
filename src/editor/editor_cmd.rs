@@ -60,6 +60,7 @@ pub enum EditorCommand {
     Search,
     Save,
     Quit,
+    ExitSearch,
     NextOccurrence,
     PrevOccurrence,
 }
@@ -74,6 +75,7 @@ impl TryFrom<Event> for EditorCommand {
             Event::Key(KeyEvent {
                 code, modifiers, ..
             }) => match (code, modifiers) {
+                (KeyCode::Esc, _) => Ok(Self::ExitSearch),
                 (KeyCode::Char('s'), KeyModifiers::CONTROL) => Ok(Self::Save),
                 (KeyCode::Char('q'), KeyModifiers::CONTROL) => Ok(Self::Quit),
                 (KeyCode::Char('i'), _) => Ok(Self::EnterInsert),

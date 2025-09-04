@@ -4,8 +4,8 @@ use super::{
 };
 
 use crate::editor::{
-    Terminal, annotated_line::AnnotatedLine, document_status::DocumentStatus, line::Line,
-    ui_component::UiComponent,
+    Terminal, annotated_line::AnnotatedLine, document_status::DocumentStatus,
+    highlighter::Highlighter, line::Line, ui_component::UiComponent,
 };
 
 use std::cmp;
@@ -103,6 +103,7 @@ impl View {
     }
 
     pub fn save_as(&mut self, file_name: &str) -> Result<(), std::io::Error> {
+        self.set_needs_redraw(true);
         self.buffer.save_as(file_name)
     }
 
@@ -365,6 +366,7 @@ impl View {
 
     pub fn get_status(&self) -> DocumentStatus {
         DocumentStatus {
+            file_type: self.buffer.file_info.file_type,
             file_name: self.buffer.file_info.to_string(),
             num_of_lines: self.buffer.height(),
             current_line: self.text_location.line_index,
@@ -404,11 +406,22 @@ impl UiComponent for View {
     /// if it is present, otherwise is it gonna simply print
     /// the name of the editor and the version.
     fn draw(&mut self, pos_y: usize) -> Result<(), std::io::Error> {
+        let query = (!self.search_term.is_empty()).then_some(self.search_term.as_str());
+        let selected_match = query.is_some().then_some(self.text_location);
+        let rows = self.buffer.lines.len();
+        let file_type = self.buffer.file_info.file_type;
+
+        let mut highlighter = Highlighter::new(rows, query, selected_match, file_type);
+
         let TerminalSize { width, height } = self.size;
         let end_y = pos_y.saturating_add(height);
 
         #[allow(clippy::integer_division)]
         let vertical_center: usize = height / 3;
+
+        for (row, line) in self.buffer.lines.iter().enumerate() {
+            highlighter.highlight(row, line);
+        }
 
         let scroll_top = self.scroll_offset.y;
         for current_row in pos_y..end_y {
@@ -417,19 +430,9 @@ impl UiComponent for View {
                 let left = self.scroll_offset.x;
                 let right = self.scroll_offset.x.saturating_add(width);
 
-                let query = if self.search_term.is_empty() {
-                    None
-                } else {
-                    Some(self.search_term.as_str())
-                };
-
-                let on_line = if self.text_location.line_index == current_row {
-                    Some(self.text_location.grapheme_index)
-                } else {
-                    None
-                };
-
-                Self::render_annotated_line(current_row, &line.get(left..right, query, on_line))?;
+                let annotations = highlighter.get_annotations(line_idx);
+                eprintln!("{annotations:?}");
+                Self::render_annotated_line(current_row, &line.get(left..right, annotations))?;
             } else if current_row == vertical_center && self.buffer.is_empty() {
                 Self::render_line(current_row, &Self::build_title(width))?;
             } else {

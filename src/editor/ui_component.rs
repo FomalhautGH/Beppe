@@ -16,9 +16,9 @@ pub trait UiComponent {
             match self.draw(pos_y) {
                 Ok(()) => self.set_needs_redraw(false),
 
-                Err(_err) => {
+                Err(err) => {
                     #[cfg(debug_assertions)]
-                    panic!("Could not render component: {_err:?}");
+                    panic!("Could not render component: {err:?}");
                 }
             }
         }

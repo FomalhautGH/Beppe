@@ -3,6 +3,8 @@ mod annotated_line_iterator;
 mod command_bar;
 mod document_status;
 mod editor_cmd;
+mod file_type;
+mod highlighter;
 mod line;
 mod message_bar;
 mod status_bar;
@@ -139,9 +141,9 @@ impl Editor {
             let event = read();
             match event {
                 Ok(event) => self.evaluate_event(event),
-                Err(_err) => {
+                Err(err) => {
                     #[cfg(debug_assertions)]
-                    panic!("Unrecognized event, error: {_err:?}");
+                    panic!("Unrecognized event, error: {err:?}");
                 }
             }
 

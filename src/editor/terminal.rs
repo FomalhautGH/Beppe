@@ -143,6 +143,28 @@ impl Terminal {
                     Self::set_foreground(Color::Black)?;
                     Self::set_background(Color::Magenta)?;
                 }
+                AnnotationType::Number => {
+                    Self::set_foreground(Color::Rgb {
+                        r: 243,
+                        g: 112,
+                        b: 102,
+                    })?;
+                }
+                AnnotationType::Keyword => {
+                    Self::set_foreground(Color::Blue)?;
+                }
+                AnnotationType::Type => {
+                    Self::set_foreground(Color::Green)?;
+                }
+                AnnotationType::Char => {
+                    Self::set_foreground(Color::Yellow)?;
+                }
+                AnnotationType::String => {
+                    Self::set_foreground(Color::DarkRed)?;
+                }
+                AnnotationType::Lifetime => {
+                    Self::set_foreground(Color::Cyan)?;
+                }
             }
 
             Self::print(i.str)?;

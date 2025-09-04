@@ -48,16 +48,25 @@ impl UiComponent for StatusBar {
 
         let line = format!(
             "{} - {} - {line_count} {modified_indicator}",
-            self.doc_status.file_name, self.editor_mode
+            self.doc_status.file_name, self.editor_mode,
         );
 
+        let separator = " | ";
         let position_indicator = self.doc_status.position_indicator_to_string();
-        let remainder_len = self.size.width.saturating_sub(line.len());
-        let status = format!("{line}{position_indicator:>remainder_len$}");
+        let ty = self.doc_status.file_type.to_string();
+        let remainder_len = self
+            .size
+            .width
+            .saturating_sub(line.len())
+            .saturating_sub(position_indicator.len())
+            .saturating_sub(separator.len())
+            .saturating_sub(1);
+
+        let status = format!("{line} {ty:>remainder_len$}{separator}{position_indicator}",);
         let to_print = if status.len() <= self.size.width {
             status
         } else {
-            String::new()
+            String::default()
         };
 
         Terminal::print_inverted_row(pos_y, &to_print)

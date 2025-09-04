@@ -3,15 +3,28 @@ use std::{
     path::PathBuf,
 };
 
+use crate::editor::file_type::FileType;
+
 #[derive(Default, Debug, Clone)]
 pub struct FileInfo {
+    pub file_type: FileType,
     pub path: Option<PathBuf>,
 }
 
 impl FileInfo {
     pub fn from(file_name: &str) -> Self {
+        let path = PathBuf::from(file_name);
+
+        let mut file_type = FileType::PlainText;
+        if let Some(ext) = path.extension()
+            && ext.eq_ignore_ascii_case("rs")
+        {
+            file_type = FileType::Rust;
+        }
+
         Self {
-            path: Some(PathBuf::from(file_name)),
+            file_type,
+            path: Some(path),
         }
     }
 }

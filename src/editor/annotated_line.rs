@@ -4,13 +4,20 @@ use crate::editor::{
 };
 use std::ops::Range;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AnnotationType {
     None,
+    Number,
+    Keyword,
+    Type,
     Match,
+    Char,
+    String,
+    Lifetime,
     SelectedMatch,
 }
 
+#[derive(Debug)]
 pub struct Annotation {
     pub range: Range<ByteIndex>,
     pub ty: AnnotationType,
@@ -36,6 +43,12 @@ impl AnnotatedLine {
         }
     }
 
+    pub fn push_annotations(&mut self, annotations: &[Annotation]) {
+        for a in annotations {
+            self.push_annotation(a.range.clone(), a.ty);
+        }
+    }
+
     pub fn append_str(&mut self, str: &str) {
         self.line.push_str(str);
     }
@@ -53,8 +66,8 @@ impl AnnotatedLine {
         if diff == 0 {
             return;
         }
-        let widened = len > prev_len;
 
+        let widened = len > prev_len;
         for ann in &mut self.annotations {
             let ann_start = &mut ann.range.start;
             let ann_end = &mut ann.range.end;
@@ -62,18 +75,20 @@ impl AnnotatedLine {
                 continue;
             }
 
-            if *ann_start >= range.end {
-                (*ann_start, *ann_end) = if widened {
-                    (ann_start.saturating_add(diff), ann_end.saturating_add(diff))
+            *ann_start = if *ann_start >= range.end {
+                if widened {
+                    ann_start.saturating_add(diff)
                 } else {
-                    (ann_start.saturating_sub(diff), ann_end.saturating_sub(diff))
+                    ann_start.saturating_sub(diff)
                 }
             } else {
-                *ann_end = if widened {
-                    ann_end.saturating_add(diff)
-                } else {
-                    ann_end.saturating_sub(diff)
-                }
+                *ann_start
+            };
+
+            *ann_end = if widened {
+                ann_end.saturating_add(diff)
+            } else {
+                ann_end.saturating_sub(diff)
             }
         }
 

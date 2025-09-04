@@ -2,7 +2,7 @@ use std::{fmt::Display, ops::Range};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use crate::editor::annotated_line::{AnnotatedLine, AnnotationType};
+use crate::editor::annotated_line::{AnnotatedLine, Annotation};
 
 pub type GraphemeIndex = usize;
 pub type ByteIndex = usize;
@@ -105,41 +105,13 @@ impl Line {
 
     /// It returs the String rapresenting the characters
     /// visible in the supplied range.
-    pub fn get(
-        &self,
-        range: Range<GraphemeIndex>,
-        query: Option<&str>,
-        selected_match: Option<GraphemeIndex>,
-    ) -> AnnotatedLine {
+    pub fn get(&self, range: Range<GraphemeIndex>, annotations: &[Annotation]) -> AnnotatedLine {
         if range.is_empty() {
             return AnnotatedLine::default();
         }
 
         let mut result = AnnotatedLine::from(&self.string);
-        if let Some(needle) = query {
-            let end = self.string.len();
-            let matches = self.find_all(needle, 0..end);
-
-            for mat in matches {
-                let from: ByteIndex = mat.0;
-                let from_gr: GraphemeIndex = mat.1;
-
-                let len: ByteIndex = needle.len();
-                let to: ByteIndex = from.saturating_add(len);
-
-                // TODO: there mught be graphemes in the search term
-                let to_gr: GraphemeIndex = from_gr.saturating_add(len);
-
-                if let Some(on) = selected_match
-                    && on >= from_gr
-                    && on < to_gr
-                {
-                    result.push_annotation(from..to, AnnotationType::SelectedMatch);
-                } else {
-                    result.push_annotation(from..to, AnnotationType::Match);
-                }
-            }
-        }
+        result.push_annotations(annotations);
 
         let end = self.string.len();
         for fragment in self.line.iter().rev() {
@@ -239,6 +211,10 @@ impl Line {
         self.rebuild_fragments();
     }
 
+    pub fn get_string(&self) -> &str {
+        &self.string
+    }
+
     pub fn search_backwards(&self, needle: &str, mut to: GraphemeIndex) -> Option<GraphemeIndex> {
         if self.line.is_empty() {
             return None;
@@ -266,18 +242,28 @@ impl Line {
             .map(|(_, grapheme_index)| *grapheme_index)
     }
 
-    fn find_all(&self, needle: &str, range: Range<ByteIndex>) -> Vec<(ByteIndex, GraphemeIndex)> {
+    pub fn find_all(
+        &self,
+        needle: &str,
+        range: Range<ByteIndex>,
+    ) -> Vec<(ByteIndex, GraphemeIndex)> {
         let start = range.start;
+        let count = Self::string_to_fragments(needle).len();
 
         self.string.get(range).map_or_else(Vec::new, |haystack| {
             haystack
                 .match_indices(needle)
-                .map(|(relative_byte_index, _)| {
+                .filter_map(|(relative_byte_index, _)| {
                     let absolute_byte_index = relative_byte_index.saturating_add(start);
-                    (
-                        absolute_byte_index,
-                        self.byte_index_to_grapheme_index(absolute_byte_index),
-                    )
+                    let absolute_gr_index = self.byte_index_to_grapheme_index(absolute_byte_index);
+                    let original = &self.line[absolute_gr_index..];
+
+                    let mut result = String::new();
+                    for frag in original.iter().take(count) {
+                        result.push_str(&frag.grapheme);
+                    }
+
+                    (needle == result).then_some((absolute_byte_index, absolute_gr_index))
                 })
                 .collect()
         })

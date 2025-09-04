@@ -1,5 +1,8 @@
+use crate::editor::file_type::FileType;
+
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct DocumentStatus {
+    pub file_type: FileType,
     pub file_name: String,
     pub num_of_lines: usize,
     pub current_line: usize,

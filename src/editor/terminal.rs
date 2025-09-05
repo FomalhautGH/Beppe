@@ -165,6 +165,9 @@ impl Terminal {
                 AnnotationType::Lifetime => {
                     Self::set_foreground(Color::Cyan)?;
                 }
+                AnnotationType::Comment => {
+                    Self::set_foreground(Color::DarkGrey)?;
+                }
             }
 
             Self::print(i.str)?;

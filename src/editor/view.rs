@@ -431,7 +431,6 @@ impl UiComponent for View {
                 let right = self.scroll_offset.x.saturating_add(width);
 
                 let annotations = highlighter.get_annotations(line_idx);
-                eprintln!("{annotations:?}");
                 Self::render_annotated_line(current_row, &line.get(left..right, annotations))?;
             } else if current_row == vertical_center && self.buffer.is_empty() {
                 Self::render_line(current_row, &Self::build_title(width))?;

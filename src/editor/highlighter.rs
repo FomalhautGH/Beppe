@@ -30,6 +30,7 @@ pub struct Highlighter<'a> {
     query: Option<&'a str>,
     selected_match: Option<Location>,
     highlighting: Vec<Vec<Annotation>>,
+    ml_counter: usize,
 }
 
 impl<'a> Highlighter<'a> {
@@ -50,6 +51,7 @@ impl<'a> Highlighter<'a> {
             query,
             selected_match,
             highlighting,
+            ml_counter: 0,
         }
     }
 
@@ -62,29 +64,119 @@ impl<'a> Highlighter<'a> {
 
     fn rust_highlighting(&mut self, row: usize, line: &Line) {
         let string = line.get_string();
-        let iter = string.split_word_bound_indices().peekable();
+        let mut iter = string.split_word_bound_indices().peekable();
 
         let mut ignore = 0;
-        for (i, word) in iter {
+        while let Some(&(i, word)) = iter.peek() {
             if i < ignore {
+                iter.next();
                 continue;
             }
 
-            let ann = match word {
-                "'" => Self::char_or_lifetime(&string[i..]),
-                _ => match Self::first_char_of(word) {
-                    ch if ch.is_ascii_digit() => Self::number(word),
-                    _ => None,
-                },
+            let ann = if self.ml_counter > 0 {
+                self.continue_comment(&string)
+            } else {
+                match word {
+                    "/" => self.comment(&string[i..]),
+                    "'" => Self::char_or_lifetime(&string[i..]),
+                    _ => match Self::first_char_of(word) {
+                        ch if ch.is_ascii_digit() => Self::number(word),
+                        _ => None,
+                    },
+                }
             };
 
             if let Some(ann) = ann {
+                // TODO: Use right shift here
                 let start = ann.range.start.saturating_add(i);
                 let end = ann.range.end.saturating_add(i);
                 ignore = end;
                 self.push_annotation(row, start..end, ann.ty);
             }
+
+            iter.next();
         }
+    }
+
+    fn continue_comment(&mut self, line: &str) -> Option<Annotation> {
+        let mut might_close = false;
+        let mut might_open = false;
+        for (i, ch) in line.char_indices() {
+            match ch {
+                '*' if might_open => {
+                    self.ml_counter = self.ml_counter.saturating_add(1);
+                    might_open = false;
+                }
+                '/' if might_close => {
+                    self.ml_counter = self.ml_counter.saturating_sub(1);
+                    if self.ml_counter == 0 {
+                        return Some(Annotation {
+                            range: 0..i.saturating_add(1),
+                            ty: AnnotationType::Comment,
+                        });
+                    }
+                }
+                '/' => might_open = true,
+                '*' => might_close = true,
+                _ => might_close = false,
+            }
+        }
+
+        Some(Annotation {
+            range: 0..line.len(),
+            ty: AnnotationType::Comment,
+        })
+    }
+
+    fn comment(&mut self, line: &str) -> Option<Annotation> {
+        let mut might_close = false;
+        let mut might_open = false;
+        for (i, ch) in line.char_indices().skip(1) {
+            match ch {
+                '/' if i == 1 => {
+                    return Some(Annotation {
+                        range: 0..line.len(),
+                        ty: AnnotationType::Comment,
+                    });
+                }
+
+                '*' if i == 1 => {
+                    self.ml_counter = self.ml_counter.saturating_add(1);
+                }
+
+                '*' if might_open => {
+                    self.ml_counter = self.ml_counter.saturating_add(1);
+                    might_open = false;
+                }
+
+                '/' if might_close => {
+                    self.ml_counter = self.ml_counter.saturating_sub(1);
+
+                    if self.ml_counter == 0 {
+                        return Some(Annotation {
+                            range: 0..i.saturating_add(1),
+                            ty: AnnotationType::Comment,
+                        });
+                    }
+
+                    might_close = false;
+                }
+
+                '/' => might_open = true,
+                '*' => might_close = true,
+
+                _ if i == 1 => return None,
+                _ => {
+                    might_close = false;
+                    might_open = false;
+                }
+            }
+        }
+
+        Some(Annotation {
+            range: 0..line.len(),
+            ty: AnnotationType::Comment,
+        })
     }
 
     fn char(line: &str) -> Option<Annotation> {

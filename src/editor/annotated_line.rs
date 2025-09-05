@@ -14,6 +14,7 @@ pub enum AnnotationType {
     Char,
     String,
     Lifetime,
+    Comment,
     SelectedMatch,
 }
 
@@ -21,6 +22,13 @@ pub enum AnnotationType {
 pub struct Annotation {
     pub range: Range<ByteIndex>,
     pub ty: AnnotationType,
+}
+
+impl Annotation {
+    pub fn right_shift(&mut self, shift: ByteIndex) {
+        self.range.start = self.range.start.saturating_add(shift);
+        self.range.end = self.range.end.saturating_add(shift);
+    }
 }
 
 #[derive(Default)]
